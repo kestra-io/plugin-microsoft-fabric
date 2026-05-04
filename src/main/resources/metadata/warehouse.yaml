@@ -1,0 +1,8 @@
+group: io.kestra.plugin.microsoft.fabric.warehouse
+name: "warehouse"
+title: "Fabric Warehouse"
+description: "Tasks to query Microsoft Fabric Warehouse using SQL over JDBC."
+body: ""
+videos: []
+createdBy: "Kestra Core Team"
+managedBy: "Kestra Core Team"

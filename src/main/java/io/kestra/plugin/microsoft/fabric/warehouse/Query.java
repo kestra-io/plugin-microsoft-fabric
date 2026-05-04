@@ -1,0 +1,202 @@
+package io.kestra.plugin.microsoft.fabric.warehouse;
+
+import io.kestra.core.models.annotations.Example;
+import io.kestra.core.models.annotations.Metric;
+import io.kestra.core.models.annotations.Plugin;
+import io.kestra.core.models.annotations.PluginProperty;
+import io.kestra.core.models.executions.metrics.Counter;
+import io.kestra.core.models.property.Property;
+import io.kestra.core.models.tasks.RunnableTask;
+import io.kestra.core.models.tasks.common.FetchType;
+import io.kestra.core.runners.RunContext;
+import io.kestra.core.serializers.FileSerde;
+import io.kestra.plugin.microsoft.fabric.AbstractFabricConnection;
+import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.NotNull;
+import lombok.*;
+import lombok.experimental.SuperBuilder;
+import reactor.core.publisher.Flux;
+
+import java.io.BufferedWriter;
+import java.io.FileWriter;
+import java.net.URI;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+
+@SuperBuilder
+@ToString
+@EqualsAndHashCode
+@Getter
+@NoArgsConstructor
+@Plugin(
+    examples = {
+        @Example(
+            full = true,
+            code = """
+                id: fabric_warehouse_query
+                namespace: company.team
+
+                tasks:
+                  - id: query
+                    type: io.kestra.plugin.microsoft.fabric.warehouse.Query
+                    tenantId: "{{ secret('FABRIC_TENANT_ID') }}"
+                    clientId: "{{ secret('FABRIC_CLIENT_ID') }}"
+                    clientSecret: "{{ secret('FABRIC_CLIENT_SECRET') }}"
+                    workspaceId: "your-workspace-id"
+                    warehouseId: "your-warehouse-id"
+                    sql: "SELECT TOP 100 * FROM dbo.sales"
+                    fetchType: STORE
+                """
+        )
+    },
+    metrics = {
+        @Metric(name = "rows", type = Counter.TYPE, description = "Number of rows returned by the query")
+    }
+)
+@Schema(
+    title = "Query a Microsoft Fabric Warehouse",
+    description = """
+        Executes a SQL query against a Microsoft Fabric Warehouse over JDBC using Active Directory service principal authentication.
+        Supports STORE (writes to Kestra internal storage as ION) and FETCH (returns rows as a list).
+        """
+)
+public class Query extends AbstractFabricConnection implements RunnableTask<Query.Output> {
+
+    @Schema(title = "Workspace ID", description = "Microsoft Fabric workspace GUID (used to resolve the warehouse host)")
+    @NotNull
+    @PluginProperty(group = "main")
+    private Property<String> workspaceId;
+
+    @Schema(title = "Warehouse ID", description = "Microsoft Fabric Warehouse item GUID; also used as the JDBC database name")
+    @NotNull
+    @PluginProperty(group = "main")
+    private Property<String> warehouseId;
+
+    @Schema(title = "SQL query", description = "SQL statement to execute against the warehouse")
+    @NotNull
+    @PluginProperty(group = "main")
+    private Property<String> sql;
+
+    @Schema(
+        title = "Fetch type",
+        description = "How to return results: STORE writes an ION file to Kestra storage; FETCH returns rows as a list (not recommended for large result sets)"
+    )
+    @Builder.Default
+    @PluginProperty(group = "processing")
+    private Property<FetchType> fetchType = Property.ofValue(FetchType.STORE);
+
+    @Override
+    public Output run(RunContext runContext) throws Exception {
+        var rWorkspaceId = runContext.render(workspaceId).as(String.class).orElseThrow();
+        var rWarehouseId = runContext.render(warehouseId).as(String.class).orElseThrow();
+        var rSql = runContext.render(sql).as(String.class).orElseThrow();
+        var rFetchType = runContext.render(fetchType).as(FetchType.class).orElse(FetchType.STORE);
+
+        var rClientId = runContext.render(clientId).as(String.class).orElse(null);
+        var rClientSecret = runContext.render(clientSecret).as(String.class).orElse(null);
+        var rTenantId = runContext.render(tenantId).as(String.class).orElse(null);
+
+        var jdbcUrl = "jdbc:sqlserver://" + rWarehouseId + ".datawarehouse.fabric.microsoft.com:1433"
+            + ";database=" + rWarehouseId
+            + ";encrypt=true;trustServerCertificate=false;loginTimeout=30";
+
+        var props = new Properties();
+
+        if (rClientId != null && rClientSecret != null && rTenantId != null) {
+            // Service principal auth via JDBC properties
+            props.setProperty("authentication", "ActiveDirectoryServicePrincipal");
+            props.setProperty("user", rClientId + "@" + rTenantId);
+            props.setProperty("password", rClientSecret);
+            props.setProperty("AADSecurePrincipalSecret", rClientSecret);
+            props.setProperty("clientId", rClientId);
+        } else {
+            // Managed identity / DefaultAzureCredential — use access token
+            var token = bearerToken(runContext);
+            props.setProperty("accessToken", token);
+        }
+
+        runContext.logger().info("Executing SQL query on warehouse '{}'", rWarehouseId);
+
+        try (var connection = DriverManager.getConnection(jdbcUrl, props);
+             var stmt = connection.createStatement();
+             var rs = stmt.executeQuery(rSql)) {
+
+            return switch (rFetchType) {
+                case STORE -> storeResults(runContext, rs);
+                case FETCH -> fetchResults(runContext, rs);
+                case FETCH_ONE -> fetchOneResult(runContext, rs);
+                case NONE -> Output.builder().size(0L).build();
+            };
+        }
+    }
+
+    private Output storeResults(RunContext runContext, ResultSet rs) throws Exception {
+        var tempFile = runContext.workingDir().createTempFile(".ion").toFile();
+        long count;
+        try (var writer = new BufferedWriter(new FileWriter(tempFile))) {
+            var rows = Flux.create(emitter -> {
+                try {
+                    var meta = rs.getMetaData();
+                    while (rs.next()) {
+                        emitter.next(rowToMap(rs, meta));
+                    }
+                    emitter.complete();
+                } catch (Exception e) {
+                    emitter.error(e);
+                }
+            });
+            count = FileSerde.writeAll(writer, rows).blockOptional().orElse(0L);
+        }
+        runContext.metric(Counter.of("rows", count));
+        var storageUri = runContext.storage().putFile(tempFile);
+        return Output.builder().uri(storageUri).size(count).build();
+    }
+
+    private Output fetchResults(RunContext runContext, ResultSet rs) throws Exception {
+        var meta = rs.getMetaData();
+        var rows = new ArrayList<Map<String, Object>>();
+        while (rs.next()) {
+            rows.add(rowToMap(rs, meta));
+        }
+        runContext.metric(Counter.of("rows", rows.size()));
+        return Output.builder().rows(rows).size((long) rows.size()).build();
+    }
+
+    private Output fetchOneResult(RunContext runContext, ResultSet rs) throws Exception {
+        var meta = rs.getMetaData();
+        Map<String, Object> row = rs.next() ? rowToMap(rs, meta) : null;
+        runContext.metric(Counter.of("rows", row == null ? 0 : 1));
+        return Output.builder().row(row).size(row == null ? 0L : 1L).build();
+    }
+
+    private static Map<String, Object> rowToMap(ResultSet rs, ResultSetMetaData meta) throws Exception {
+        var map = new LinkedHashMap<String, Object>();
+        for (int i = 1; i <= meta.getColumnCount(); i++) {
+            map.put(meta.getColumnLabel(i), rs.getObject(i));
+        }
+        return map;
+    }
+
+    @Builder
+    @Getter
+    public static class Output implements io.kestra.core.models.tasks.Output {
+        @Schema(title = "Storage URI", description = "Kestra internal storage URI of the ION file when fetchType=STORE")
+        private final URI uri;
+
+        @Schema(title = "Rows", description = "Result rows when fetchType=FETCH")
+        private final List<Map<String, Object>> rows;
+
+        @Schema(title = "Row", description = "Single result row when fetchType=FETCH_ONE")
+        private final Map<String, Object> row;
+
+        @Schema(title = "Row count", description = "Number of rows returned")
+        private final long size;
+    }
+}

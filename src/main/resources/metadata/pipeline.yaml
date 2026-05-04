@@ -1,0 +1,8 @@
+group: io.kestra.plugin.microsoft.fabric.pipeline
+name: "pipeline"
+title: "Fabric Data Pipelines"
+description: "Tasks to trigger and monitor Microsoft Fabric Data Pipeline runs."
+body: ""
+videos: []
+createdBy: "Kestra Core Team"
+managedBy: "Kestra Core Team"
