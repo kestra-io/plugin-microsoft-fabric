@@ -104,7 +104,7 @@ public class Query extends AbstractFabricConnection implements RunnableTask<Quer
         ds.setServerName(rWarehouseId + ".datawarehouse.fabric.microsoft.com");
         ds.setPortNumber(1433);
         ds.setDatabaseName(rWarehouseId);
-        ds.setEncrypt(true);
+        ds.setEncrypt("true");
         ds.setTrustServerCertificate(false);
         ds.setLoginTimeout(30);
         ds.setResponseBuffering("adaptive");
