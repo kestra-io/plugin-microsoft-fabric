@@ -1,4 +1,4 @@
-package io.kestra.plugin.microsoft.fabric.pipeline;
+package io.kestra.plugin.microsoft.fabric.data.engineering;
 
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.client.WireMock;
@@ -20,7 +20,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.*;
 
 @KestraTest
-class RunTest {
+class RunPipelineTest {
 
     @Inject
     private RunContextFactory runContextFactory;
@@ -57,9 +57,9 @@ class RunTest {
 
         var runContext = runContextFactory.of();
 
-        var task = TestableRun.builder()
+        var task = TestableRunPipeline.builder()
             .id(UUID.randomUUID().toString())
-            .type(Run.class.getName())
+            .type(RunPipeline.class.getName())
             .workspaceId(Property.ofValue(workspaceId))
             .pipelineId(Property.ofValue(pipelineId))
             .wait(Property.ofValue(true))
@@ -90,9 +90,9 @@ class RunTest {
                 .withHeader("Location", "http://localhost:" + wireMock.port() + pollPath)));
 
         var runContext = runContextFactory.of();
-        var task = TestableRun.builder()
+        var task = TestableRunPipeline.builder()
             .id(UUID.randomUUID().toString())
-            .type(Run.class.getName())
+            .type(RunPipeline.class.getName())
             .workspaceId(Property.ofValue(workspaceId))
             .pipelineId(Property.ofValue(pipelineId))
             .wait(Property.ofValue(false))
@@ -124,9 +124,9 @@ class RunTest {
             .willReturn(okJson("{\"id\":\"" + runId + "\",\"status\":\"Failed\"}")));
 
         var runContext = runContextFactory.of();
-        var task = TestableRun.builder()
+        var task = TestableRunPipeline.builder()
             .id(UUID.randomUUID().toString())
-            .type(Run.class.getName())
+            .type(RunPipeline.class.getName())
             .workspaceId(Property.ofValue(workspaceId))
             .pipelineId(Property.ofValue(pipelineId))
             .wait(Property.ofValue(true))

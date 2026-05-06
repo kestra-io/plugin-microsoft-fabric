@@ -1,4 +1,4 @@
-package io.kestra.plugin.microsoft.fabric.engineering;
+package io.kestra.plugin.microsoft.fabric.data.engineering;
 
 import io.kestra.core.runners.RunContext;
 import lombok.Getter;
@@ -12,7 +12,7 @@ import lombok.experimental.SuperBuilder;
 @SuperBuilder
 @Getter
 @NoArgsConstructor
-public class TestableRunNotebook extends RunNotebook {
+public class TestableRunPipeline extends RunPipeline {
 
     private String fabricApiBaseOverride;
     private String fakeToken;

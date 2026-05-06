@@ -1,4 +1,4 @@
-package io.kestra.plugin.microsoft.fabric.engineering;
+package io.kestra.plugin.microsoft.fabric.data.engineering;
 
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.client.WireMock;

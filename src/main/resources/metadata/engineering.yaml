@@ -1,8 +1,0 @@
-group: io.kestra.plugin.microsoft.fabric.engineering
-name: "engineering"
-title: "Data Engineering"
-description: "Tasks to run Notebooks and Spark Job Definitions in Microsoft Fabric Data Engineering."
-body: ""
-videos: []
-createdBy: "Kestra Core Team"
-managedBy: "Kestra Core Team"
