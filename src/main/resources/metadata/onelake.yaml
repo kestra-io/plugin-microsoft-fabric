@@ -1,0 +1,8 @@
+group: io.kestra.plugin.microsoft.fabric.onelake
+name: "onelake"
+title: "OneLake"
+description: "Tasks to upload, download, and delete files in Microsoft Fabric OneLake using the ADLS Gen2 API."
+body: ""
+videos: []
+createdBy: "Kestra Core Team"
+managedBy: "Kestra Core Team"
