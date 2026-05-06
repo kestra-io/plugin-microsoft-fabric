@@ -113,8 +113,8 @@ public class Query extends AbstractFabricConnection implements RunnableTask<Quer
         runContext.logger().info("Executing SQL query on warehouse '{}'", rWarehouseId);
 
         try (var connection = ds.getConnection();
-             var stmt = connection.createStatement();
-             var rs = stmt.executeQuery(rSql)) {
+             var stmt = connection.prepareStatement(rSql);
+             var rs = stmt.executeQuery()) {
 
             return switch (rFetchType) {
                 case STORE -> storeResults(runContext, rs);
