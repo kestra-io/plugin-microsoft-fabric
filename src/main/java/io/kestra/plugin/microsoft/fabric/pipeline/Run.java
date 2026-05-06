@@ -65,7 +65,7 @@ import java.util.concurrent.atomic.AtomicReference;
 public class Run extends AbstractFabricConnection implements RunnableTask<Run.Output> {
 
     private static final String FABRIC_API_BASE = "https://api.fabric.microsoft.com/v1";
-    private static final String STATUS_SUCCEEDED = "Succeeded";
+    private static final String STATUS_SUCCEEDED = "Completed";
     private static final List<String> TERMINAL_FAILED = List.of("Failed", "Cancelled", "Deduped");
 
     @Schema(title = "Workspace ID", description = "Microsoft Fabric workspace GUID")
@@ -206,7 +206,7 @@ public class Run extends AbstractFabricConnection implements RunnableTask<Run.Ou
         @Schema(title = "Job instance ID", description = "Unique ID of the pipeline job instance")
         private final String runId;
 
-        @Schema(title = "Final status", description = "Terminal status of the pipeline job: Succeeded, Failed, Cancelled, or Deduped")
+        @Schema(title = "Final status", description = "Terminal status of the pipeline job: Completed, Failed, Cancelled, or Deduped")
         private final String status;
     }
 

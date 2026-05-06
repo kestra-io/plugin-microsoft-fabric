@@ -30,7 +30,7 @@ import java.util.concurrent.atomic.AtomicReference;
 abstract class AbstractEngineering extends AbstractFabricConnection {
 
     private static final String FABRIC_API_BASE = "https://api.fabric.microsoft.com/v1";
-    static final String STATUS_SUCCEEDED = "Succeeded";
+    static final String STATUS_SUCCEEDED = "Completed";
     static final List<String> TERMINAL_FAILED = List.of("Failed", "Cancelled", "Deduped");
 
     @Schema(title = "Workspace ID", description = "Microsoft Fabric workspace GUID")

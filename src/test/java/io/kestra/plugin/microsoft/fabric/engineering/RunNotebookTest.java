@@ -52,7 +52,7 @@ class RunNotebookTest {
                 .withHeader("Location", "http://localhost:" + wireMock.port() + pollPath)));
 
         wireMock.stubFor(get(urlEqualTo(pollPath))
-            .willReturn(okJson("{\"id\":\"" + jobInstanceId + "\",\"status\":\"Succeeded\"}")));
+            .willReturn(okJson("{\"id\":\"" + jobInstanceId + "\",\"status\":\"Completed\"}")));
 
         var runContext = runContextFactory.of();
         var task = TestableRunNotebook.builder()
@@ -71,6 +71,6 @@ class RunNotebookTest {
 
         assertThat(output, notNullValue());
         assertThat(output.getJobInstanceId(), notNullValue());
-        assertThat(output.getStatus(), is("Succeeded"));
+        assertThat(output.getStatus(), is("Completed"));
     }
 }

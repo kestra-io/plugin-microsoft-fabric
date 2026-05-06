@@ -53,7 +53,7 @@ class RunTest {
                 .withHeader("Location", "http://localhost:" + wireMock.port() + pollPath)));
 
         wireMock.stubFor(get(urlEqualTo(pollPath))
-            .willReturn(okJson("{\"id\":\"" + runId + "\",\"status\":\"Succeeded\"}")));
+            .willReturn(okJson("{\"id\":\"" + runId + "\",\"status\":\"Completed\"}")));
 
         var runContext = runContextFactory.of();
 
@@ -73,7 +73,7 @@ class RunTest {
 
         assertThat(output, notNullValue());
         assertThat(output.getRunId(), notNullValue());
-        assertThat(output.getStatus(), is("Succeeded"));
+        assertThat(output.getStatus(), is("Completed"));
     }
 
     @Test
