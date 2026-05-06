@@ -68,7 +68,7 @@ import java.util.Map;
 )
 public class Query extends AbstractFabricConnection implements RunnableTask<Query.Output> {
 
-    @Schema(title = "Workspace ID", description = "Microsoft Fabric workspace GUID; used as the SQL endpoint hostname (<workspaceId>.datawarehouse.fabric.microsoft.com)")
+    @Schema(title = "Workspace ID", description = "Microsoft Fabric workspace GUID")
     @NotNull
     @PluginProperty(group = "main")
     private Property<String> workspaceId;
@@ -101,7 +101,7 @@ public class Query extends AbstractFabricConnection implements RunnableTask<Quer
         var token = warehouseToken(runContext);
 
         var ds = new SQLServerDataSource();
-        ds.setServerName(rWorkspaceId + ".datawarehouse.fabric.microsoft.com");
+        ds.setServerName(rWarehouseId + ".datawarehouse.fabric.microsoft.com");
         ds.setPortNumber(1433);
         ds.setDatabaseName(rWarehouseId);
         ds.setEncrypt(true);
