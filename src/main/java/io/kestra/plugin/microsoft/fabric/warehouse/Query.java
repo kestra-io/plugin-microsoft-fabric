@@ -17,17 +17,17 @@ import lombok.*;
 import lombok.experimental.SuperBuilder;
 import reactor.core.publisher.Flux;
 
+import com.microsoft.sqlserver.jdbc.SQLServerDataSource;
+
 import java.io.BufferedWriter;
 import java.io.FileWriter;
 import java.net.URI;
-import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 
 @SuperBuilder
 @ToString
@@ -98,18 +98,21 @@ public class Query extends AbstractFabricConnection implements RunnableTask<Quer
         var rSql = runContext.render(sql).as(String.class).orElseThrow();
         var rFetchType = runContext.render(fetchType).as(FetchType.class).orElse(FetchType.STORE);
 
-        var jdbcUrl = "jdbc:sqlserver://" + rWorkspaceId + ".datawarehouse.fabric.microsoft.com:1433"
-            + ";database=" + rWarehouseId
-            + ";encrypt=true;trustServerCertificate=false;loginTimeout=30"
-            + ";responseBuffering=adaptive";
-
         var token = warehouseToken(runContext);
-        var props = new Properties();
-        props.setProperty("accessToken", token);
+
+        var ds = new SQLServerDataSource();
+        ds.setServerName(rWorkspaceId + ".datawarehouse.fabric.microsoft.com");
+        ds.setPortNumber(1433);
+        ds.setDatabaseName(rWarehouseId);
+        ds.setEncrypt(true);
+        ds.setTrustServerCertificate(false);
+        ds.setLoginTimeout(30);
+        ds.setResponseBuffering("adaptive");
+        ds.setAccessToken(token);
 
         runContext.logger().info("Executing SQL query on warehouse '{}'", rWarehouseId);
 
-        try (var connection = new com.microsoft.sqlserver.jdbc.SQLServerDriver().connect(jdbcUrl, props);
+        try (var connection = ds.getConnection();
              var stmt = connection.createStatement();
              var rs = stmt.executeQuery(rSql)) {
 
