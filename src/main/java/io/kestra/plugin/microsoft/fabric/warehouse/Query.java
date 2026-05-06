@@ -49,6 +49,7 @@ import java.util.Map;
                     clientId: "{{ secret('FABRIC_CLIENT_ID') }}"
                     clientSecret: "{{ secret('FABRIC_CLIENT_SECRET') }}"
                     sqlEndpointId: "your-sql-endpoint-id"
+                    warehouseId: "your-warehouse-id"
                     sql: "SELECT TOP 100 * FROM dbo.sales"
                     fetchType: STORE
                 """
@@ -77,6 +78,11 @@ public class Query extends AbstractFabricConnection implements RunnableTask<Quer
     @PluginProperty(group = "main")
     private Property<String> sqlEndpointId;
 
+    @Schema(title = "Warehouse ID", description = "Microsoft Fabric Warehouse item GUID, used as the JDBC database name")
+    @NotNull
+    @PluginProperty(group = "main")
+    private Property<String> warehouseId;
+
     @Schema(title = "SQL query", description = "SQL statement to execute against the warehouse")
     @NotNull
     @PluginProperty(group = "main")
@@ -92,14 +98,15 @@ public class Query extends AbstractFabricConnection implements RunnableTask<Quer
 
     @Override
     public Output run(RunContext runContext) throws Exception {
-        var rWarehouseId = runContext.render(sqlEndpointId).as(String.class).orElseThrow();
+        var rSqlEndpointId = runContext.render(sqlEndpointId).as(String.class).orElseThrow();
+        var rWarehouseId = runContext.render(warehouseId).as(String.class).orElseThrow();
         var rSql = runContext.render(sql).as(String.class).orElseThrow();
         var rFetchType = runContext.render(fetchType).as(FetchType.class).orElse(FetchType.STORE);
 
         var token = warehouseToken(runContext);
 
         var ds = new SQLServerDataSource();
-        ds.setServerName(rWarehouseId + ".datawarehouse.fabric.microsoft.com");
+        ds.setServerName(rSqlEndpointId + ".datawarehouse.fabric.microsoft.com");
         ds.setPortNumber(1433);
         ds.setDatabaseName(rWarehouseId);
         ds.setEncrypt("true");
@@ -108,7 +115,7 @@ public class Query extends AbstractFabricConnection implements RunnableTask<Quer
         ds.setResponseBuffering("adaptive");
         ds.setAccessToken(token);
 
-        runContext.logger().info("Executing SQL query on warehouse '{}'", rWarehouseId);
+        runContext.logger().info("Executing SQL query on warehouse '{}' via endpoint '{}'", rWarehouseId, rSqlEndpointId);
 
         try (var connection = ds.getConnection();
              var stmt = connection.prepareStatement(rSql);
