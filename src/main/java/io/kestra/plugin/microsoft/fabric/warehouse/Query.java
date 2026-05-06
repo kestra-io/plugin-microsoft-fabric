@@ -68,7 +68,7 @@ import java.util.Properties;
 )
 public class Query extends AbstractFabricConnection implements RunnableTask<Query.Output> {
 
-    @Schema(title = "Workspace ID", description = "Microsoft Fabric workspace GUID (used to resolve the warehouse host)")
+    @Schema(title = "Workspace ID", description = "Microsoft Fabric workspace GUID; used as the SQL endpoint hostname (<workspaceId>.datawarehouse.fabric.microsoft.com)")
     @NotNull
     @PluginProperty(group = "main")
     private Property<String> workspaceId;
@@ -98,10 +98,10 @@ public class Query extends AbstractFabricConnection implements RunnableTask<Quer
         var rSql = runContext.render(sql).as(String.class).orElseThrow();
         var rFetchType = runContext.render(fetchType).as(FetchType.class).orElse(FetchType.STORE);
 
-        var jdbcUrl = "jdbc:sqlserver://" + rWarehouseId + ".datawarehouse.fabric.microsoft.com:1433"
+        var jdbcUrl = "jdbc:sqlserver://" + rWorkspaceId + ".datawarehouse.fabric.microsoft.com:1433"
             + ";database=" + rWarehouseId
             + ";encrypt=true;trustServerCertificate=false;loginTimeout=30"
-            + ";hostNameInCertificate=*.datawarehouse.fabric.microsoft.com";
+            + ";responseBuffering=adaptive";
 
         var token = warehouseToken(runContext);
         var props = new Properties();
