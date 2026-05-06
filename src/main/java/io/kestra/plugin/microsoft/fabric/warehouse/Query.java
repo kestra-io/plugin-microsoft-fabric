@@ -67,7 +67,11 @@ import java.util.Map;
 )
 public class Query extends AbstractFabricConnection implements RunnableTask<Query.Output> {
 
-    @Schema(title = "Warehouse ID", description = "Microsoft Fabric Warehouse item GUID; also used as the JDBC database name")
+    @Schema(
+        title = "Warehouse ID",
+        description = "Microsoft Fabric Warehouse item GUID, used as the JDBC server hostname (<warehouseId>.datawarehouse.fabric.microsoft.com). " +
+            "Find it in the Fabric portal: open your Warehouse, go to Settings → SQL endpoint, and copy the server name from the SQL connection string."
+    )
     @NotNull
     @PluginProperty(group = "main")
     private Property<String> warehouseId;
