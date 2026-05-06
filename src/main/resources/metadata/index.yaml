@@ -1,7 +1,7 @@
-group: io.kestra.plugin.template
-name: "template"
-title: "Template"
-description: "Plugin template for Kestra"
+group: io.kestra.plugin.microsoft.fabric
+name: "microsoft-fabric"
+title: "Microsoft Fabric"
+description: "Integrate with Microsoft Fabric services including Data Pipelines, OneLake, Data Engineering, and Warehouse within Kestra workflows."
 body: ""
 videos: []
 createdBy: "Kestra Core Team"
