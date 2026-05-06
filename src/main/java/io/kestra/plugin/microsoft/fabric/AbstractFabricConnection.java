@@ -34,7 +34,7 @@ public abstract class AbstractFabricConnection extends Task {
         title = "Client Secret",
         description = "Service principal client secret. When both clientId and clientSecret are provided, service principal authentication is used; otherwise DefaultAzureCredential is used."
     )
-    @PluginProperty(group = "connection")
+    @PluginProperty(group = "connection", secret = true)
     protected Property<String> clientSecret;
 
     protected TokenCredential credentials(RunContext runContext) throws Exception {

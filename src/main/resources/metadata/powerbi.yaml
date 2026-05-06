@@ -1,8 +1,0 @@
-group: io.kestra.plugin.microsoft.fabric.powerbi
-name: "powerbi"
-title: "Power BI"
-description: "Tasks to trigger and monitor Power BI semantic model refreshes within Microsoft Fabric."
-body: ""
-videos: []
-createdBy: "Kestra Core Team"
-managedBy: "Kestra Core Team"
