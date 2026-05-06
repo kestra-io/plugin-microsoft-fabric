@@ -98,26 +98,14 @@ public class Query extends AbstractFabricConnection implements RunnableTask<Quer
         var rSql = runContext.render(sql).as(String.class).orElseThrow();
         var rFetchType = runContext.render(fetchType).as(FetchType.class).orElse(FetchType.STORE);
 
-        var rClientId = runContext.render(clientId).as(String.class).orElse(null);
-        var rClientSecret = runContext.render(clientSecret).as(String.class).orElse(null);
-        var rTenantId = runContext.render(tenantId).as(String.class).orElse(null);
-
         var jdbcUrl = "jdbc:sqlserver://" + rWarehouseId + ".datawarehouse.fabric.microsoft.com:1433"
             + ";database=" + rWarehouseId
             + ";encrypt=true;trustServerCertificate=false;loginTimeout=30"
             + ";hostNameInCertificate=*.datawarehouse.fabric.microsoft.com";
 
+        var token = warehouseToken(runContext);
         var props = new Properties();
-
-        if (rClientId != null && rClientSecret != null && rTenantId != null) {
-            props.setProperty("authentication", "ActiveDirectoryServicePrincipal");
-            props.setProperty("AADTenantId", rTenantId);
-            props.setProperty("user", rClientId);
-            props.setProperty("password", rClientSecret);
-        } else {
-            var token = bearerToken(runContext);
-            props.setProperty("accessToken", token);
-        }
+        props.setProperty("accessToken", token);
 
         runContext.logger().info("Executing SQL query on warehouse '{}'", rWarehouseId);
 

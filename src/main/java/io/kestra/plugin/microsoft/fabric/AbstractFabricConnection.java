@@ -57,4 +57,10 @@ public abstract class AbstractFabricConnection extends Task {
         var ctx = new TokenRequestContext().addScopes("https://api.fabric.microsoft.com/.default");
         return cred.getTokenSync(ctx).getToken();
     }
+
+    protected String warehouseToken(RunContext runContext) throws Exception {
+        var cred = credentials(runContext);
+        var ctx = new TokenRequestContext().addScopes("https://database.windows.net/.default");
+        return cred.getTokenSync(ctx).getToken();
+    }
 }
