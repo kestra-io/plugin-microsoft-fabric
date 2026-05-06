@@ -48,7 +48,6 @@ import java.util.Map;
                     tenantId: "{{ secret('FABRIC_TENANT_ID') }}"
                     clientId: "{{ secret('FABRIC_CLIENT_ID') }}"
                     clientSecret: "{{ secret('FABRIC_CLIENT_SECRET') }}"
-                    workspaceId: "your-workspace-id"
                     warehouseId: "your-warehouse-id"
                     sql: "SELECT TOP 100 * FROM dbo.sales"
                     fetchType: STORE
@@ -67,11 +66,6 @@ import java.util.Map;
         """
 )
 public class Query extends AbstractFabricConnection implements RunnableTask<Query.Output> {
-
-    @Schema(title = "Workspace ID", description = "Microsoft Fabric workspace GUID")
-    @NotNull
-    @PluginProperty(group = "main")
-    private Property<String> workspaceId;
 
     @Schema(title = "Warehouse ID", description = "Microsoft Fabric Warehouse item GUID; also used as the JDBC database name")
     @NotNull
@@ -93,7 +87,6 @@ public class Query extends AbstractFabricConnection implements RunnableTask<Quer
 
     @Override
     public Output run(RunContext runContext) throws Exception {
-        var rWorkspaceId = runContext.render(workspaceId).as(String.class).orElseThrow();
         var rWarehouseId = runContext.render(warehouseId).as(String.class).orElseThrow();
         var rSql = runContext.render(sql).as(String.class).orElseThrow();
         var rFetchType = runContext.render(fetchType).as(FetchType.class).orElse(FetchType.STORE);
