@@ -1,7 +1,7 @@
 @PluginSubGroup(
     title = "Data Engineering",
     description = "Tasks to run Pipelines, Notebooks, and Spark Job Definitions in Microsoft Fabric Data Engineering.",
-    categories = PluginSubGroup.PluginCategory.CLOUD
+    categories = PluginSubGroup.PluginCategory.DATA
 )
 package io.kestra.plugin.microsoft.fabric.data.engineering;
 
