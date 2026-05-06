@@ -21,7 +21,6 @@ import java.io.BufferedWriter;
 import java.io.FileWriter;
 import java.net.URI;
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.util.ArrayList;
@@ -105,26 +104,24 @@ public class Query extends AbstractFabricConnection implements RunnableTask<Quer
 
         var jdbcUrl = "jdbc:sqlserver://" + rWarehouseId + ".datawarehouse.fabric.microsoft.com:1433"
             + ";database=" + rWarehouseId
-            + ";encrypt=true;trustServerCertificate=false;loginTimeout=30";
+            + ";encrypt=true;trustServerCertificate=false;loginTimeout=30"
+            + ";hostNameInCertificate=*.datawarehouse.fabric.microsoft.com";
 
         var props = new Properties();
 
         if (rClientId != null && rClientSecret != null && rTenantId != null) {
-            // Service principal auth via JDBC properties
             props.setProperty("authentication", "ActiveDirectoryServicePrincipal");
-            props.setProperty("user", rClientId + "@" + rTenantId);
+            props.setProperty("AADTenantId", rTenantId);
+            props.setProperty("user", rClientId);
             props.setProperty("password", rClientSecret);
-            props.setProperty("AADSecurePrincipalSecret", rClientSecret);
-            props.setProperty("clientId", rClientId);
         } else {
-            // Managed identity / DefaultAzureCredential — use access token
             var token = bearerToken(runContext);
             props.setProperty("accessToken", token);
         }
 
         runContext.logger().info("Executing SQL query on warehouse '{}'", rWarehouseId);
 
-        try (var connection = DriverManager.getConnection(jdbcUrl, props);
+        try (var connection = new com.microsoft.sqlserver.jdbc.SQLServerDriver().connect(jdbcUrl, props);
              var stmt = connection.createStatement();
              var rs = stmt.executeQuery(rSql)) {
 
