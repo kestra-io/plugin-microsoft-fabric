@@ -24,7 +24,7 @@ class QueryTest {
         var task = Query.builder()
             .id(UUID.randomUUID().toString())
             .type(Query.class.getName())
-            .workspaceId(Property.ofValue("workspace-id"))
+            .sqlEndpointId(Property.ofValue("sql-endpoint-id"))
             .warehouseId(Property.ofValue("warehouse-id"))
             .sql(Property.ofValue("SELECT 1"))
             .fetchType(Property.ofValue(FetchType.FETCH))
@@ -32,7 +32,7 @@ class QueryTest {
 
         assertThat(task, notNullValue());
         assertThat(task.getSql(), notNullValue());
-        assertThat(task.getWarehouseId(), notNullValue());
+        assertThat(task.getSqlEndpointId(), notNullValue());
     }
 
     @Test
@@ -48,7 +48,7 @@ class QueryTest {
             .tenantId(Property.ofValue(System.getenv("FABRIC_TENANT_ID")))
             .clientId(Property.ofValue(System.getenv("FABRIC_CLIENT_ID")))
             .clientSecret(Property.ofValue(System.getenv("FABRIC_CLIENT_SECRET")))
-            .workspaceId(Property.ofValue(System.getenv("FABRIC_WORKSPACE_ID")))
+            .sqlEndpointId(Property.ofValue(System.getenv("FABRIC_SQL_ENDPOINT_ID")))
             .warehouseId(Property.ofValue(System.getenv("FABRIC_WAREHOUSE_ID")))
             .sql(Property.ofValue("SELECT 1 AS one"))
             .fetchType(Property.ofValue(FetchType.FETCH))
