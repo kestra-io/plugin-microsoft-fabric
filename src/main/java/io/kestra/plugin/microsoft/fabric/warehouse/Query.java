@@ -48,7 +48,7 @@ import java.util.Map;
                     tenantId: "{{ secret('FABRIC_TENANT_ID') }}"
                     clientId: "{{ secret('FABRIC_CLIENT_ID') }}"
                     clientSecret: "{{ secret('FABRIC_CLIENT_SECRET') }}"
-                    warehouseId: "your-warehouse-id"
+                    sqlEndpointId: "your-sql-endpoint-id"
                     sql: "SELECT TOP 100 * FROM dbo.sales"
                     fetchType: STORE
                 """
@@ -68,13 +68,14 @@ import java.util.Map;
 public class Query extends AbstractFabricConnection implements RunnableTask<Query.Output> {
 
     @Schema(
-        title = "Warehouse ID",
-        description = "Microsoft Fabric Warehouse item GUID, used as the JDBC server hostname (<warehouseId>.datawarehouse.fabric.microsoft.com). " +
-            "Find it in the Fabric portal: open your Warehouse, go to Settings → SQL endpoint, and copy the server name from the SQL connection string."
+        title = "SQL Endpoint ID",
+        description = "Unique identifier of the Fabric Warehouse SQL endpoint, used as the JDBC server hostname " +
+            "(<sqlEndpointId>.datawarehouse.fabric.microsoft.com). " +
+            "Find it in the Fabric portal: open your Warehouse → Settings → SQL endpoint → copy the unique identifier from the SQL connection string."
     )
     @NotNull
     @PluginProperty(group = "main")
-    private Property<String> warehouseId;
+    private Property<String> sqlEndpointId;
 
     @Schema(title = "SQL query", description = "SQL statement to execute against the warehouse")
     @NotNull
@@ -91,7 +92,7 @@ public class Query extends AbstractFabricConnection implements RunnableTask<Quer
 
     @Override
     public Output run(RunContext runContext) throws Exception {
-        var rWarehouseId = runContext.render(warehouseId).as(String.class).orElseThrow();
+        var rWarehouseId = runContext.render(sqlEndpointId).as(String.class).orElseThrow();
         var rSql = runContext.render(sql).as(String.class).orElseThrow();
         var rFetchType = runContext.render(fetchType).as(FetchType.class).orElse(FetchType.STORE);
 
