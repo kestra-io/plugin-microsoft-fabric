@@ -63,7 +63,7 @@ dependencies {
     implementation(group: 'com.azure', name: 'azure-storage-file-datalake', kestraProvidedJackson)
 
     // SQL Server JDBC for Fabric Warehouse
-    implementation 'com.microsoft.sqlserver:mssql-jdbc:12.8.2.jre11'
+    implementation 'com.microsoft.sqlserver:mssql-jdbc:13.4.0.jre11'
 }
 
 
