@@ -1,5 +1,5 @@
 @PluginSubGroup(
-    title = "Data Engineering",
+    title = "Microsoft Fabric Data Engineering",
     description = "Tasks to run Pipelines, Notebooks, and Spark Job Definitions in Microsoft Fabric Data Engineering.",
     categories = PluginSubGroup.PluginCategory.DATA
 )

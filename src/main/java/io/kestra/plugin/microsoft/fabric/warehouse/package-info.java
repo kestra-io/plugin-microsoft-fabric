@@ -1,5 +1,5 @@
 @PluginSubGroup(
-    title = "Fabric Warehouse",
+    title = "Microsoft Fabric Warehouse",
     description = "Tasks to query Microsoft Fabric Warehouse using SQL over JDBC.",
     categories = PluginSubGroup.PluginCategory.DATA
 )
