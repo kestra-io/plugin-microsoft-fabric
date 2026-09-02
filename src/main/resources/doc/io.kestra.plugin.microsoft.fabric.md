@@ -4,7 +4,7 @@ Interact with Microsoft Fabric — OneLake storage, Warehouse SQL, notebooks, Sp
 
 ## Authentication
 
-Set `tenantId`, `clientId`, and `clientSecret` for service principal authentication. If all three are provided, the plugin uses `ClientSecretCredential`; otherwise it falls back to `DefaultAzureCredential`. Store secrets in [secrets](https://kestra.io/docs/concepts/secret) and apply connection properties globally with [plugin defaults](https://kestra.io/docs/workflow-components/plugin-defaults).
+Set `tenantId`, `clientId`, and `clientSecret` for service principal authentication. If all three are provided, the plugin uses `ClientSecretCredential`; otherwise it falls back to `DefaultAzureCredential`. Store secrets in [secrets](https://kestra.io/docs/concepts/secret) and set connection properties on each task.
 
 ## Tasks
 
