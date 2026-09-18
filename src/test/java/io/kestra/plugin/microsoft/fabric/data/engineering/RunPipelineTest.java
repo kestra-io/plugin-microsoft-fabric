@@ -3,6 +3,7 @@ package io.kestra.plugin.microsoft.fabric.data.engineering;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.client.WireMock;
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
+import io.kestra.core.exceptions.KilledException;
 import io.kestra.core.junit.annotations.KestraTest;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.runners.RunContext;
@@ -168,12 +169,12 @@ class RunPipelineTest {
         task.kill();
 
         assertThat(failure.done().await(10, TimeUnit.SECONDS), is(true));
-        assertThat(failure.error().get(), instanceOf(InterruptedException.class));
-        wireMock.verify(1, postRequestedFor(urlEqualTo(pollPath + "/cancel")));
+        assertThat(failure.error().get(), instanceOf(KilledException.class));
+        awaitCancelRequest(pollPath);
     }
 
     @Test
-    void stop_stopsPollingButLeavesTheFabricJobRunning() throws Exception {
+    void stop_stopsPollingAndCancelsTheFabricJob() throws Exception {
         var workspaceId = UUID.randomUUID().toString();
         var pipelineId = UUID.randomUUID().toString();
         var runId = UUID.randomUUID().toString();
@@ -188,14 +189,36 @@ class RunPipelineTest {
         wireMock.stubFor(get(urlEqualTo(pollPath))
             .willReturn(okJson("{\"id\":\"" + runId + "\",\"status\":\"Running\"}")));
 
+        wireMock.stubFor(post(urlEqualTo(pollPath + "/cancel"))
+            .willReturn(aResponse().withStatus(202)));
+
         var task = runningTask(workspaceId, pipelineId);
         var failure = runUntilPolling(task, pollPath);
 
         task.stop();
 
         assertThat(failure.done().await(10, TimeUnit.SECONDS), is(true));
-        assertThat(failure.error().get(), instanceOf(InterruptedException.class));
-        wireMock.verify(0, postRequestedFor(urlEqualTo(pollPath + "/cancel")));
+        assertThat(failure.error().get(), instanceOf(KilledException.class));
+        awaitCancelRequest(pollPath);
+    }
+
+    @Test
+    void killBeforeRun_neverSubmitsTheFabricJob() {
+        var workspaceId = UUID.randomUUID().toString();
+        var pipelineId = UUID.randomUUID().toString();
+        var jobPath = "/v1/workspaces/" + workspaceId + "/items/" + pipelineId + "/jobs/instances";
+
+        wireMock.stubFor(post(urlPathEqualTo(jobPath))
+            .willReturn(aResponse().withStatus(202)
+                .withHeader("Location", "http://localhost:" + wireMock.port() + "/v1/jobs/instances/never")));
+
+        var runContext = runContextFactory.of();
+        var task = runningTask(workspaceId, pipelineId);
+
+        task.kill();
+
+        org.junit.jupiter.api.Assertions.assertThrows(KilledException.class, () -> task.run(runContext));
+        wireMock.verify(0, postRequestedFor(urlPathEqualTo(jobPath)));
     }
 
     private TestableRunPipeline runningTask(String workspaceId, String pipelineId) {
@@ -239,6 +262,17 @@ class RunPipelineTest {
         }
 
         return new TaskFailure(done, error);
+    }
+
+    /** The cancel request is dispatched off the lifecycle thread, so it can land after run() has already failed. */
+    private void awaitCancelRequest(String pollPath) throws InterruptedException {
+        var deadline = System.nanoTime() + Duration.ofSeconds(10).toNanos();
+        while (wireMock.findAll(postRequestedFor(urlEqualTo(pollPath + "/cancel"))).isEmpty()) {
+            if (System.nanoTime() > deadline) {
+                throw new AssertionError("no cancel request reached the Fabric API");
+            }
+            Thread.sleep(25);
+        }
     }
 
     private record TaskFailure(CountDownLatch done, AtomicReference<Throwable> error) {}

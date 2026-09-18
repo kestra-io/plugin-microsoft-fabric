@@ -2,6 +2,7 @@ package io.kestra.plugin.microsoft.fabric.data.engineering;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import io.kestra.core.exceptions.KilledException;
 import io.kestra.core.http.HttpRequest;
 import io.kestra.core.http.client.HttpClient;
 import io.kestra.core.http.client.configurations.HttpConfiguration;
@@ -21,6 +22,7 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -64,28 +66,36 @@ abstract class AbstractEngineering extends AbstractFabricConnection implements W
     @PluginProperty(group = "execution")
     protected Property<Duration> timeout = Property.ofValue(Duration.ofHours(1));
 
-    /** Counted down by {@link #kill()} and {@link #stop()} to release the poll loop from another thread. */
+    // Never reset at the start of run(): each retry attempt deserializes a fresh task instance, so a
+    // reset would only ever swallow a kill delivered just before run() on this same instance.
+    @JsonIgnore
+    @Getter(AccessLevel.NONE)
+    @EqualsAndHashCode.Exclude
+    @ToString.Exclude
+    @Builder.Default
+    private final AtomicBoolean isCancelled = new AtomicBoolean(false);
+
+    @JsonIgnore
+    @Getter(AccessLevel.NONE)
+    @EqualsAndHashCode.Exclude
+    @ToString.Exclude
+    @Builder.Default
+    private final AtomicBoolean cancelDispatched = new AtomicBoolean(false);
+
+    /** Set once the job instance is known, so a kill cancels the live job rather than a stale one. */
+    @JsonIgnore
+    @Getter(AccessLevel.NONE)
+    @EqualsAndHashCode.Exclude
+    @ToString.Exclude
+    @Builder.Default
+    private final AtomicReference<Runnable> killable = new AtomicReference<>();
+
     @JsonIgnore
     @Getter(AccessLevel.NONE)
     @EqualsAndHashCode.Exclude
     @ToString.Exclude
     @Builder.Default
     private final CountDownLatch cancelSignal = new CountDownLatch(1);
-
-    /** Set once the job is submitted, so a kill can cancel the live job instance rather than a stale one. */
-    @JsonIgnore
-    @Getter(AccessLevel.NONE)
-    @EqualsAndHashCode.Exclude
-    @ToString.Exclude
-    @Builder.Default
-    private final AtomicReference<RunningJob> runningJob = new AtomicReference<>();
-
-    @JsonIgnore
-    @Getter(AccessLevel.NONE)
-    @EqualsAndHashCode.Exclude
-    @ToString.Exclude
-    @Builder.Default
-    private final AtomicBoolean remoteCancelIssued = new AtomicBoolean(false);
 
     protected String fabricApiBase() {
         return FABRIC_API_BASE;
@@ -97,55 +107,72 @@ abstract class AbstractEngineering extends AbstractFabricConnection implements W
 
     @Override
     public void kill() {
-        cancelSignal.countDown();
-        cancelRemoteJob();
+        this.cancel();
     }
 
     /**
-     * Server shutdown: release the poll loop but leave the Fabric job running, it is not the user
-     * cancelling the execution. Must stay non-blocking.
+     * A graceful worker shutdown finishes the task inside the grace period, so it ends terminally and is never
+     * resubmitted. Leaving the Fabric job running here would orphan it for good.
      */
     @Override
     public void stop() {
-        cancelSignal.countDown();
+        this.cancel();
     }
 
-    private void cancelRemoteJob() {
-        var job = runningJob.get();
-        if (job == null || !remoteCancelIssued.compareAndSet(false, true)) {
+    private void cancel() {
+        if (!isCancelled.compareAndSet(false, true)) {
             return;
         }
 
-        var logger = job.runContext().logger();
-        try (var client = HttpClient.builder().runContext(job.runContext()).configuration(HttpConfiguration.builder().build()).build()) {
+        // Wakes the poll loop now instead of leaving it asleep for up to pollFrequency.
+        cancelSignal.countDown();
+        dispatchRemoteCancel();
+    }
+
+    /**
+     * Sends the cancel request on a background thread: kill() and stop() run on the worker lifecycle thread and
+     * must not block. Delivery is best-effort, an abrupt worker exit can cut the request off before it lands.
+     */
+    private void dispatchRemoteCancel() {
+        var remoteCancel = killable.get();
+
+        // Nothing to cancel yet: leave cancelDispatched unset, or the dispatch from submitAndWait() once the
+        // job instance is known would be silently skipped.
+        if (remoteCancel == null || !cancelDispatched.compareAndSet(false, true)) {
+            return;
+        }
+
+        CompletableFuture.runAsync(remoteCancel);
+    }
+
+    private void cancelJobInstance(RunContext runContext, String jobInstanceUrl, String jobInstanceId, String token) {
+        var logger = runContext.logger();
+        try (var client = HttpClient.builder().runContext(runContext).configuration(HttpConfiguration.builder().build()).build()) {
             var response = client.request(HttpRequest.builder()
-                .uri(URI.create(job.jobInstanceUrl() + "/cancel"))
+                .uri(URI.create(jobInstanceUrl + "/cancel"))
                 .method("POST")
-                .addHeader("Authorization", "Bearer " + job.token())
+                .addHeader("Authorization", "Bearer " + token)
                 .build(), String.class);
 
             int status = response.getStatus().getCode();
-            if (status == 202 || status == 200) {
-                logger.info("Requested cancellation of Fabric job instance '{}'", job.jobInstanceId());
+            if (status == 200 || status == 202) {
+                logger.info("Requested cancellation of Fabric job instance '{}'", jobInstanceId);
             } else {
-                logger.warn("Cancellation of Fabric job instance '{}' returned HTTP {}: {}", job.jobInstanceId(), status, response.getBody());
+                logger.warn("Cancellation of Fabric job instance '{}' returned HTTP {}: {}", jobInstanceId, status, response.getBody());
             }
         } catch (Exception e) {
-            logger.warn("Failed to cancel Fabric job instance '{}', it may still be running", job.jobInstanceId(), e);
+            logger.warn("Failed to cancel Fabric job instance '{}', it may still be running", jobInstanceId, e);
         }
     }
 
-    private boolean isCancelled() {
-        return cancelSignal.getCount() == 0;
-    }
-
-    /** @return true when the cancel signal fired during the wait. */
-    private boolean awaitCancelFor(Duration duration) throws InterruptedException {
-        return cancelSignal.await(duration.toMillis(), TimeUnit.MILLISECONDS);
-    }
-
-    private InterruptedException cancelled(String jobType, String jobInstanceId, String lastStatus) {
-        return new InterruptedException(jobType + " job '" + jobInstanceId + "' polling was cancelled, last status: " + lastStatus);
+    /** Sleeps for {@code duration}, waking early when a kill or stop lands. */
+    private void awaitCancellable(Duration duration) throws InterruptedException {
+        try {
+            cancelSignal.await(duration.toMillis(), TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw e;
+        }
     }
 
     protected JobResult submitAndWait(RunContext runContext, String itemId, String jobType) throws Exception {
@@ -156,6 +183,10 @@ abstract class AbstractEngineering extends AbstractFabricConnection implements W
         var rWait = runContext.render(wait).as(Boolean.class).orElse(Boolean.TRUE);
         var rPollFrequency = runContext.render(pollFrequency).as(Duration.class).orElse(Duration.ofSeconds(5));
         var rTimeout = runContext.render(timeout).as(Duration.class).orElse(Duration.ofHours(1));
+
+        if (isCancelled.get()) {
+            throw new KilledException("Task was killed before the " + jobType + " job was submitted");
+        }
 
         var token = resolveToken(runContext);
         var startUrl = URI.create(fabricApiBase() + "/workspaces/" + rWorkspaceId
@@ -187,23 +218,28 @@ abstract class AbstractEngineering extends AbstractFabricConnection implements W
 
         var jobInstanceId = locationHeader.substring(locationHeader.lastIndexOf('/') + 1);
 
-        // fire-and-forget: the job outlives the task run, so a kill must not cancel it
+        // fire-and-forget: the job is meant to outlive the task run, so a kill must not cancel it
         if (!Boolean.TRUE.equals(rWait)) {
             return new JobResult(jobInstanceId, "Running");
         }
 
-        runningJob.set(new RunningJob(runContext, locationHeader, jobInstanceId, token));
+        killable.set(() -> cancelJobInstance(runContext, locationHeader, jobInstanceId, token));
 
-        // A kill that landed before the job was registered never saw it, so cancel it here.
-        if (isCancelled()) {
-            cancelRemoteJob();
-            throw cancelled(jobType, jobInstanceId, "Running");
+        // A kill landing between the submit and the line above found nothing to cancel, so dispatch it here.
+        if (isCancelled.get()) {
+            dispatchRemoteCancel();
+            throw new KilledException(jobType + " job '" + jobInstanceId + "' was killed before completion");
         }
 
         var lastStatus = "Running";
         var deadline = Instant.now().plus(rTimeout);
 
         while (true) {
+            if (isCancelled.get()) {
+                throw new KilledException("Stopped polling " + jobType + " job '" + jobInstanceId
+                    + "': the task was killed or the worker is shutting down");
+            }
+
             lastStatus = pollStatus(runContext, locationHeader, token);
             logger.debug("{} job '{}' status: {}", jobType, jobInstanceId, lastStatus);
 
@@ -216,9 +252,8 @@ abstract class AbstractEngineering extends AbstractFabricConnection implements W
             if (Instant.now().isAfter(deadline)) {
                 throw new TimeoutException(jobType + " job '" + jobInstanceId + "' did not complete within " + rTimeout + "; last status: " + lastStatus);
             }
-            if (awaitCancelFor(rPollFrequency)) {
-                throw cancelled(jobType, jobInstanceId, lastStatus);
-            }
+
+            awaitCancellable(rPollFrequency);
         }
 
         logger.info("{} job '{}' completed with status '{}'", jobType, jobInstanceId, lastStatus);
@@ -237,8 +272,9 @@ abstract class AbstractEngineering extends AbstractFabricConnection implements W
 
                 var response = client.request(request, String.class);
                 if (response.getStatus().getCode() == 429) {
-                    if (awaitCancelFor(THROTTLED_BACKOFF)) {
-                        throw new InterruptedException("Cancelled while backing off from a throttled Fabric status poll");
+                    awaitCancellable(THROTTLED_BACKOFF);
+                    if (isCancelled.get()) {
+                        throw new KilledException("Stopped polling Fabric job instance: throttled, then the task was killed or the worker is shutting down");
                     }
                     continue;
                 }
@@ -252,15 +288,6 @@ abstract class AbstractEngineering extends AbstractFabricConnection implements W
     }
 
     record JobResult(String jobInstanceId, String status) {}
-
-    /** Everything {@link #cancelRemoteJob()} needs to reach the running job from the killing thread. */
-    record RunningJob(RunContext runContext, String jobInstanceUrl, String jobInstanceId, String token) {
-        @Override
-        public String toString() {
-            // never let the bearer token reach a log line
-            return "RunningJob[" + jobInstanceId + "]";
-        }
-    }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     @Getter
