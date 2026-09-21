@@ -22,12 +22,14 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @SuperBuilder
 @ToString
@@ -35,6 +37,8 @@ import java.util.concurrent.atomic.AtomicReference;
 @Getter
 @NoArgsConstructor
 abstract class AbstractEngineering extends AbstractFabricConnection implements WorkerJobLifecycle {
+
+    private static final Logger LOG = LoggerFactory.getLogger(AbstractEngineering.class);
 
     private static final String FABRIC_API_BASE = "https://api.fabric.microsoft.com/v1";
     private static final Duration THROTTLED_BACKOFF = Duration.ofSeconds(30);
@@ -110,10 +114,8 @@ abstract class AbstractEngineering extends AbstractFabricConnection implements W
         this.cancel();
     }
 
-    /**
-     * A graceful worker shutdown finishes the task inside the grace period, so it ends terminally and is never
-     * resubmitted. Leaving the Fabric job running here would orphan it for good.
-     */
+    // A graceful shutdown ends the task terminally inside the grace period, never resubmitted, so leaving the
+    // Fabric job running would orphan it for good.
     @Override
     public void stop() {
         this.cancel();
@@ -142,7 +144,13 @@ abstract class AbstractEngineering extends AbstractFabricConnection implements W
             return;
         }
 
-        CompletableFuture.runAsync(remoteCancel);
+        try {
+            Thread.ofVirtual().name("fabric-job-instance-cancel").start(remoteCancel);
+        } catch (Exception e) {
+            // kill() and stop() must never throw. The cancel outcome itself is logged on the execution by
+            // cancelJobInstance; this only reports that the dispatch never started.
+            LOG.warn("Failed to dispatch the Fabric job instance cancellation", e);
+        }
     }
 
     private void cancelJobInstance(RunContext runContext, String jobInstanceUrl, String jobInstanceId, String token) {
