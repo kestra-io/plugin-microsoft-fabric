@@ -58,6 +58,14 @@ dependencies {
     compileOnly group: "io.kestra", name: "core", version: kestraVersion
     compileOnly group: "io.kestra", name: "script", version: kestraVersion
 
+    // Power BI legacy HTTP client and Jackson support (same classpath contract as plugin-powerbi)
+    compileOnly "io.micronaut:micronaut-http-client"
+    compileOnly "io.micronaut.reactor:micronaut-reactor"
+    compileOnly "io.micronaut:micronaut-jackson-databind"
+    compileOnly group: 'com.fasterxml.jackson.module', name: 'jackson-module-parameter-names'
+    compileOnly group: 'com.fasterxml.jackson.datatype', name: 'jackson-datatype-guava'
+    compileOnly group: 'com.fasterxml.jackson.datatype', name: 'jackson-datatype-jsr310'
+
     // Azure SDK (versions managed by Kestra platform BOM)
     implementation(group: 'com.azure', name: 'azure-identity', kestraProvidedJackson)
     implementation(group: 'com.azure', name: 'azure-storage-file-datalake', kestraProvidedJackson)
