@@ -78,6 +78,35 @@ class RefreshGroupDatasetTest {
     }
 
     @Test
+    void noWaitAcceptsDocumentedMsRequestIdHeader(WireMockRuntimeInfo wm) throws Exception {
+        stubAuth(wm);
+        var requestId = UUID.randomUUID().toString();
+        stubFor(post(urlEqualTo(refreshesPath()))
+            .willReturn(aResponse().withStatus(202).withHeader("x-ms-request-id", requestId)));
+
+        var output = task(wm).build().run(runContextFactory.of());
+
+        assertThat(output.getRequestId(), is(requestId));
+        assertThat(output.getStatus(), nullValue());
+        verify(0, getRequestedFor(urlEqualTo(refreshesPath())));
+    }
+
+    @Test
+    void noWaitCanExtractRequestIdFromLocationHeader(WireMockRuntimeInfo wm) throws Exception {
+        stubAuth(wm);
+        var requestId = UUID.randomUUID().toString();
+        var location = "https://api.powerbi.com/v1.0/myorg/groups/group/datasets/dataset/refreshes/" + requestId;
+        stubFor(post(urlEqualTo(refreshesPath()))
+            .willReturn(aResponse().withStatus(202).withHeader("Location", location)));
+
+        var output = task(wm).build().run(runContextFactory.of());
+
+        assertThat(output.getRequestId(), is(requestId));
+        assertThat(output.getStatus(), nullValue());
+        verify(0, getRequestedFor(urlEqualTo(refreshesPath())));
+    }
+
+    @Test
     void missingRequestIdHeaderFailsClearly(WireMockRuntimeInfo wm) throws Exception {
         stubAuth(wm);
         stubFor(post(urlEqualTo(refreshesPath())).willReturn(aResponse().withStatus(202).withBody("{}")));
