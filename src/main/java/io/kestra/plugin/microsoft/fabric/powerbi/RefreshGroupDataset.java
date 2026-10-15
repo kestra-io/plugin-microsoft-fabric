@@ -126,7 +126,13 @@ public class RefreshGroupDataset extends AbstractPowerBi implements RunnableTask
             throw new IllegalStateException("Power BI refresh request failed with HTTP " + response.getStatus().getCode() + ": " + response.getBody());
         }
 
-        Optional<String> refreshId = response.getHeaders().firstValue("requestId");
+        // Keep the legacy header first, but also accept the documented Power BI async-operation
+        // headers. The Location resource identifies the refresh itself; x-ms-request-id is the
+        // fallback when the service does not return a Location header.
+        Optional<String> refreshId = response.getHeaders().firstValue("requestId")
+            .filter(id -> !id.isBlank())
+            .or(() -> response.getHeaders().firstValue("Location").flatMap(RefreshGroupDataset::requestIdFromLocation))
+            .or(() -> response.getHeaders().firstValue("x-ms-request-id").filter(id -> !id.isBlank()));
         if (refreshId.isEmpty() || refreshId.get().isBlank()) {
             throw new IllegalStateException(
                 "Invalid Power BI refresh response: missing requestId header, body '" + response.getBody() + "', headers '" + response.getHeaders() + "'"
@@ -163,6 +169,27 @@ public class RefreshGroupDataset extends AbstractPowerBi implements RunnableTask
             .startTime(result.startTime())
             .endTime(result.endTime())
             .build();
+    }
+
+    private static Optional<String> requestIdFromLocation(String location) {
+        try {
+            String path = URI.create(location).getRawPath();
+            if (path == null) {
+                return Optional.empty();
+            }
+
+            String[] segments = path.split("/");
+            if (segments.length < 2
+                || !"refreshes".equals(segments[segments.length - 2])
+                || segments[segments.length - 1].isBlank()) {
+                return Optional.empty();
+            }
+
+            return Optional.of(segments[segments.length - 1]);
+        } catch (IllegalArgumentException e) {
+            // Ignore malformed Location headers and continue to the x-ms-request-id fallback.
+            return Optional.empty();
+        }
     }
 
     private boolean loggerTraceEnabled(RunContext runContext) {
