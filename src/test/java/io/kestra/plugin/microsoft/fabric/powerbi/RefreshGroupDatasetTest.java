@@ -5,8 +5,11 @@ import com.github.tomakehurst.wiremock.junit5.WireMockTest;
 import io.kestra.core.junit.annotations.KestraTest;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.runners.RunContextFactory;
+import io.kestra.core.storages.StorageInterface;
+import io.micronaut.test.annotation.MockBean;
 import jakarta.inject.Inject;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 import java.time.Duration;
 import java.util.UUID;
@@ -23,6 +26,11 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 class RefreshGroupDatasetTest {
     @Inject
     private RunContextFactory runContextFactory;
+
+    @MockBean(StorageInterface.class)
+    StorageInterface storageInterface() {
+        return Mockito.mock(StorageInterface.class);
+    }
 
     @Test
     void refreshWaitsAndReturnsLegacyOutputAndPowerBiAuthentication(WireMockRuntimeInfo wm) throws Exception {

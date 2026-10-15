@@ -149,6 +149,8 @@ public abstract class AbstractPowerBi extends Task {
         return httpConfiguration().toBuilder()
             .allowFailed(Property.ofValue(true))
             .allowedResponseCodes(null)
+            // Keep this last: a copied default HTTP configuration can synthesize Basic auth.
+            .auth(null)
             .build();
     }
 

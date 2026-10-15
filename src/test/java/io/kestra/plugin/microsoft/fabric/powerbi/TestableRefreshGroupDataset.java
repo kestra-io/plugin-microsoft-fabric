@@ -8,7 +8,7 @@ import lombok.experimental.SuperBuilder;
 @SuperBuilder
 @Getter
 @NoArgsConstructor
-class TestableRefreshGroupDataset extends RefreshGroupDataset {
+public class TestableRefreshGroupDataset extends RefreshGroupDataset {
     private String loginUrlOverride;
     private String apiUrlOverride;
 
