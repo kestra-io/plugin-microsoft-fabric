@@ -11,7 +11,7 @@ This is a single-module Gradle plugin. Source packages currently include:
 - `io.kestra.plugin.microsoft.fabric` — shared Fabric connection handling and root plugin metadata.
 - `io.kestra.plugin.microsoft.fabric.onelake` — `Upload`, `Download`, and `Delete`.
 - `io.kestra.plugin.microsoft.fabric.warehouse` — `Query`.
-- `io.kestra.plugin.microsoft.fabric.engineering` — `RunPipeline`, `RunNotebook`, and `RunSparkJob`.
+- `io.kestra.plugin.microsoft.fabric.data.engineering` — `RunPipeline`, `RunNotebook`, and `RunSparkJob`.
 - `io.kestra.plugin.microsoft.fabric.powerbi` — `RefreshGroupDataset`, `AbstractPowerBi`, and the refresh response models.
 
 Power BI deliberately uses its own credential request semantics: the token request targets the Microsoft identity platform and requests the Power BI API resource/scope (`https://analysis.windows.net/powerbi/api`), rather than reusing the Fabric REST API token scope.
