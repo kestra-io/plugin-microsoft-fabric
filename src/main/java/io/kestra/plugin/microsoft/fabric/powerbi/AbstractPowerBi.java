@@ -40,17 +40,17 @@ public abstract class AbstractPowerBi extends Task {
 
     @NotNull
     @Schema(title = "Azure tenant ID")
-    @PluginProperty(dynamic = true, group = "main")
+    @PluginProperty(group = "main")
     private Property<String> tenantId;
 
     @NotNull
     @Schema(title = "Azure client ID")
-    @PluginProperty(dynamic = true, group = "main")
+    @PluginProperty(group = "main")
     private Property<String> clientId;
 
     @NotNull
     @Schema(title = "Azure client secret")
-    @PluginProperty(dynamic = true, group = "main", secret = true)
+    @PluginProperty(group = "main", secret = true)
     @ToString.Exclude
     private Property<String> clientSecret;
 
