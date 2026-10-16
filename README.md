@@ -1,40 +1,49 @@
 <p align="center">
   <a href="https://www.kestra.io">
-    <img src="https://kestra.io/banner.png"  alt="Kestra workflow orchestrator" />
+    <img src="https://kestra.io/banner.png" alt="Kestra workflow orchestrator" />
   </a>
 </p>
 
-<h1 align="center" style="border-bottom: none">
-    Event-Driven Declarative Orchestrator
-</h1>
-
-<div align="center">
- <a href="https://github.com/kestra-io/kestra/releases"><img src="https://img.shields.io/github/tag-pre/kestra-io/kestra.svg?color=blueviolet" alt="Last Version" /></a>
-  <a href="https://github.com/kestra-io/kestra/blob/develop/LICENSE"><img src="https://img.shields.io/github/license/kestra-io/kestra?color=blueviolet" alt="License" /></a>
-  <a href="https://github.com/kestra-io/kestra/stargazers"><img src="https://img.shields.io/github/stars/kestra-io/kestra?color=blueviolet&logo=github" alt="Github star" /></a> <br>
-<a href="https://kestra.io"><img src="https://img.shields.io/badge/Website-kestra.io-192A4E?color=blueviolet" alt="Kestra infinitely scalable orchestration and scheduling platform"></a>
-<a href="https://kestra.io/slack"><img src="https://img.shields.io/badge/Slack-Join%20Community-blueviolet?logo=slack" alt="Slack"></a>
-</div>
-
-<br />
-
-<p align="center">
-  <a href="https://twitter.com/kestra_io" style="margin: 0 10px;">
-        <img src="https://kestra.io/twitter.svg" alt="twitter" width="35" height="25" /></a>
-  <a href="https://www.linkedin.com/company/kestra/" style="margin: 0 10px;">
-        <img src="https://kestra.io/linkedin.svg" alt="linkedin" width="35" height="25" /></a>
-  <a href="https://www.youtube.com/@kestra-io" style="margin: 0 10px;">
-        <img src="https://kestra.io/youtube.svg" alt="youtube" width="35" height="25" /></a>
-</p>
-
-<br />
-<p align="center">
-    <a href="https://go.kestra.io/video/product-overview" target="_blank">
-        <img src="https://kestra.io/startvideo.png" alt="Get started in 3 minutes with Kestra" width="640px" />
-    </a>
-</p>
-<p align="center" style="color:grey;"><i>Get started with Kestra in 3 minutes.</i></p>
-
 # Kestra Microsoft Fabric Plugin
 
-.
+This plugin adds Microsoft Fabric and Power BI tasks to [Kestra](https://kestra.io), an open-source orchestration platform. It supports OneLake file operations, Fabric Data Engineering jobs, Warehouse queries, and Power BI semantic-model refreshes.
+
+## Available tasks
+
+| Task | Description |
+| --- | --- |
+| `io.kestra.plugin.microsoft.fabric.data.engineering.RunPipeline` | Run a Fabric Data Pipeline. |
+| `io.kestra.plugin.microsoft.fabric.data.engineering.RunNotebook` | Run a Fabric notebook. |
+| `io.kestra.plugin.microsoft.fabric.data.engineering.RunSparkJob` | Run a Fabric Spark Job Definition. |
+| `io.kestra.plugin.microsoft.fabric.onelake.Upload` | Upload a file to OneLake. |
+| `io.kestra.plugin.microsoft.fabric.onelake.Download` | Download a file from OneLake. |
+| `io.kestra.plugin.microsoft.fabric.onelake.Delete` | Delete a file from OneLake. |
+| `io.kestra.plugin.microsoft.fabric.warehouse.Query` | Execute a SQL query against a Fabric Warehouse. |
+| `io.kestra.plugin.microsoft.fabric.powerbi.RefreshGroupDataset` | Refresh a Power BI dataset and optionally wait for completion. |
+
+### Power BI compatibility
+
+The canonical task type is `io.kestra.plugin.microsoft.fabric.powerbi.RefreshGroupDataset`. Existing flows using the legacy type `io.kestra.plugin.powerbi.RefreshGroupDataset` remain supported through a task alias.
+
+The Power BI refresh task uses Azure service-principal credentials and the Power BI API OAuth resource/scope. Its legacy property names, defaults, and outputs are retained. `notifyOption` is optional and does not alter the request when omitted.
+
+## Example
+
+```yaml
+id: refresh-powerbi-dataset
+namespace: company.team
+
+tasks:
+  - id: refresh_sales_model
+    type: io.kestra.plugin.microsoft.fabric.powerbi.RefreshGroupDataset
+    tenantId: "{{ secret('AZURE_TENANT_ID') }}"
+    clientId: "{{ secret('AZURE_CLIENT_ID') }}"
+    clientSecret: "{{ secret('AZURE_CLIENT_SECRET') }}"
+    groupId: "9f1c2b8c-12ab-4f3e-9bcd-0af2c5e6d123"
+    datasetId: "5c8b4a1e-7f89-4c33-9dd8-1f23c4567890"
+    wait: true
+    pollDuration: PT5S
+    waitDuration: PT10M
+```
+
+The service principal must have permission to refresh the target dataset. See the [Power BI dataset refresh API](https://learn.microsoft.com/en-us/rest/api/power-bi/datasets/refresh-dataset-in-group) and the [Kestra plugin developer guide](https://kestra.io/docs/plugin-developer-guide).
