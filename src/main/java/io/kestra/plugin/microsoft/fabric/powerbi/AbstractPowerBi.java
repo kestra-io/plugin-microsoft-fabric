@@ -15,7 +15,6 @@ import io.kestra.core.models.tasks.Task;
 import io.kestra.core.runners.RunContext;
 import io.kestra.core.serializers.JacksonMapper;
 import io.swagger.v3.oas.annotations.media.Schema;
-import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import lombok.AccessLevel;
 import lombok.EqualsAndHashCode;
@@ -26,7 +25,8 @@ import lombok.experimental.SuperBuilder;
 
 import java.io.IOException;
 import java.net.URI;
-import java.util.ArrayList;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
 @SuperBuilder
@@ -39,23 +39,20 @@ public abstract class AbstractPowerBi extends Task {
     private static final String API_URL = "https://api.powerbi.com";
 
     @NotNull
-    @NotEmpty
     @Schema(title = "Azure tenant ID")
     @PluginProperty(dynamic = true, group = "main")
-    private String tenantId;
+    private Property<String> tenantId;
 
     @NotNull
-    @NotEmpty
     @Schema(title = "Azure client ID")
     @PluginProperty(dynamic = true, group = "main")
-    private String clientId;
+    private Property<String> clientId;
 
     @NotNull
-    @NotEmpty
     @Schema(title = "Azure client secret")
     @PluginProperty(dynamic = true, group = "main", secret = true)
     @ToString.Exclude
-    private String clientSecret;
+    private Property<String> clientSecret;
 
     @Schema(title = "The HTTP client configuration")
     @PluginProperty(group = "advanced")
@@ -63,6 +60,16 @@ public abstract class AbstractPowerBi extends Task {
 
     @Getter(AccessLevel.NONE)
     private transient String token;
+
+    /**
+     * Encode a dynamic value as one URL path segment. Dots are encoded as well so values equal
+     * to "." or ".." cannot be interpreted as path traversal segments.
+     */
+    protected static String encodePathSegment(String value) {
+        return URLEncoder.encode(value, StandardCharsets.UTF_8)
+            .replace("+", "%20")
+            .replace(".", "%2E");
+    }
 
     /** Override points allow tests to exercise the same auth flow against WireMock. */
     protected String loginUrl() {
@@ -78,10 +85,10 @@ public abstract class AbstractPowerBi extends Task {
             return this.token;
         }
 
-        var renderedTenantId = runContext.render(this.tenantId);
-        var renderedClientId = runContext.render(this.clientId);
-        var renderedClientSecret = runContext.render(this.clientSecret);
-        URI uri = URI.create(loginUrl() + "/" + renderedTenantId + "/oauth2/token");
+        var renderedTenantId = runContext.render(this.tenantId).as(String.class).orElseThrow();
+        var renderedClientId = runContext.render(this.clientId).as(String.class).orElseThrow();
+        var renderedClientSecret = runContext.render(this.clientSecret).as(String.class).orElseThrow();
+        URI uri = URI.create(loginUrl() + "/" + encodePathSegment(renderedTenantId) + "/oauth2/token");
 
         HttpRequest request = HttpRequest.builder()
             .uri(uri)
