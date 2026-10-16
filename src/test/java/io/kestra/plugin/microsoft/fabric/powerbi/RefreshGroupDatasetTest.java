@@ -107,6 +107,31 @@ class RefreshGroupDatasetTest {
     }
 
     @Test
+    void dynamicIdentifiersAreEncodedAsSinglePathSegments(WireMockRuntimeInfo wm) throws Exception {
+        var tenantId = "tenant/../?tenant=1";
+        var groupId = "group/../?x=y";
+        var datasetId = "dataset/../?d=1";
+        var tokenPath = "/login/tenant%2F%2E%2E%2F%3Ftenant%3D1/oauth2/token";
+        var refreshPath = "/api/v1.0/myorg/groups/group%2F%2E%2E%2F%3Fx%3Dy/datasets/dataset%2F%2E%2E%2F%3Fd%3D1/refreshes";
+        var requestId = UUID.randomUUID().toString();
+
+        stubFor(post(urlEqualTo(tokenPath)).willReturn(okJson("{\\"access_token\\":\\"test-token\\"}")));
+        stubFor(post(urlEqualTo(refreshPath))
+            .willReturn(aResponse().withStatus(202).withHeader("requestId", requestId)));
+
+        var output = task(wm)
+            .tenantId(Property.ofValue(tenantId))
+            .groupId(Property.ofValue(groupId))
+            .datasetId(Property.ofValue(datasetId))
+            .build()
+            .run(runContextFactory.of());
+
+        assertThat(output.getRequestId(), is(requestId));
+        verify(postRequestedFor(urlEqualTo(tokenPath)));
+        verify(postRequestedFor(urlEqualTo(refreshPath)));
+    }
+
+    @Test
     void missingRequestIdHeaderFailsClearly(WireMockRuntimeInfo wm) throws Exception {
         stubAuth(wm);
         stubFor(post(urlEqualTo(refreshesPath())).willReturn(aResponse().withStatus(202).withBody("{}")));
@@ -226,9 +251,9 @@ class RefreshGroupDatasetTest {
         return TestableRefreshGroupDataset.builder()
             .id(UUID.randomUUID().toString())
             .type(RefreshGroupDataset.class.getName())
-            .tenantId("tenant")
-            .clientId("client")
-            .clientSecret("secret")
+            .tenantId(Property.ofValue("tenant"))
+            .clientId(Property.ofValue("client"))
+            .clientSecret(Property.ofValue("secret"))
             .groupId(Property.ofValue("group"))
             .datasetId(Property.ofValue("dataset"))
             .loginUrlOverride(base + "/login")
