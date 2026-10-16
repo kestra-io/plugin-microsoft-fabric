@@ -66,12 +66,14 @@ import static io.kestra.core.utils.Rethrow.throwSupplier;
     }
 )
 public class RefreshGroupDataset extends AbstractPowerBi implements RunnableTask<RefreshGroupDataset.Output> {
+    @NotNull
     @Schema(title = "Workspace (group) ID", description = "GUID of the workspace containing the dataset.")
-    @PluginProperty(group = "advanced")
+    @PluginProperty(group = "main")
     private Property<String> groupId;
 
+    @NotNull
     @Schema(title = "Dataset ID", description = "GUID of the dataset to refresh.")
-    @PluginProperty(group = "source")
+    @PluginProperty(group = "main")
     private Property<String> datasetId;
 
     @Schema(
@@ -107,7 +109,8 @@ public class RefreshGroupDataset extends AbstractPowerBi implements RunnableTask
         var logger = runContext.logger();
         var renderedGroupId = runContext.render(groupId).as(String.class).orElseThrow();
         var renderedDatasetId = runContext.render(datasetId).as(String.class).orElseThrow();
-        var refreshesUrl = apiUrl() + "/v1.0/myorg/groups/" + renderedGroupId + "/datasets/" + renderedDatasetId + "/refreshes";
+        var refreshesUrl = apiUrl() + "/v1.0/myorg/groups/" + encodePathSegment(renderedGroupId)
+            + "/datasets/" + encodePathSegment(renderedDatasetId) + "/refreshes";
 
         var postRequestBuilder = HttpRequest.builder()
             .uri(URI.create(refreshesUrl))
