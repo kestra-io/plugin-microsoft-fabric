@@ -115,7 +115,7 @@ class RefreshGroupDatasetTest {
         var refreshPath = "/api/v1.0/myorg/groups/group%2F%2E%2E%2F%3Fx%3Dy/datasets/dataset%2F%2E%2E%2F%3Fd%3D1/refreshes";
         var requestId = UUID.randomUUID().toString();
 
-        stubFor(post(urlEqualTo(tokenPath)).willReturn(okJson("{\\"access_token\\":\\"test-token\\"}")));
+        stubFor(post(urlEqualTo(tokenPath)).willReturn(okJson("{\"access_token\":\"test-token\"}")));
         stubFor(post(urlEqualTo(refreshPath))
             .willReturn(aResponse().withStatus(202).withHeader("requestId", requestId)));
 
