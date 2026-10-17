@@ -59,6 +59,7 @@ public abstract class AbstractPowerBi extends Task {
     protected HttpConfiguration options;
 
     @Getter(AccessLevel.NONE)
+    @ToString.Exclude
     private transient String token;
 
     /**
