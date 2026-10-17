@@ -124,7 +124,8 @@ public class RefreshGroupDataset extends AbstractPowerBi implements RunnableTask
             }
         }
 
-        HttpResponse<String> response = request(runContext, postRequestBuilder.build(), String.class);
+        var accessToken = fetchToken(runContext);
+        HttpResponse<String> response = request(runContext, accessToken, postRequestBuilder.build(), String.class);
         if (response.getStatus().getCode() < 200 || response.getStatus().getCode() >= 300) {
             throw new IllegalStateException("Power BI refresh request failed with HTTP " + response.getStatus().getCode() + ": " + response.getBody());
         }
@@ -152,7 +153,7 @@ public class RefreshGroupDataset extends AbstractPowerBi implements RunnableTask
         Refresh result;
         try {
             result = Await.until(
-                throwSupplier(() -> pollRefresh(runContext, refreshesUrl, refreshId.get(), loggerTraceEnabled(runContext))),
+                throwSupplier(() -> pollRefresh(runContext, accessToken, refreshesUrl, refreshId.get(), loggerTraceEnabled(runContext))),
                 renderedPollDuration,
                 renderedWaitDuration
             );
@@ -199,12 +200,12 @@ public class RefreshGroupDataset extends AbstractPowerBi implements RunnableTask
         return runContext.logger().isTraceEnabled();
     }
 
-    private Refresh pollRefresh(RunContext runContext, String refreshesUrl, String refreshId, boolean traceEnabled)
+    private Refresh pollRefresh(RunContext runContext, String accessToken, String refreshesUrl, String refreshId, boolean traceEnabled)
         throws Exception {
         HttpRequest getRequest = HttpRequest.builder().uri(URI.create(refreshesUrl)).method("GET").build();
         // Read as text first so non-JSON throttling/error bodies cannot fail deserialization before we
         // inspect the HTTP status.
-        HttpResponse<String> response = request(runContext, getRequest, String.class);
+        HttpResponse<String> response = request(runContext, accessToken, getRequest, String.class);
         int statusCode = response.getStatus().getCode();
 
         // A throttled poll did not return refresh state. Let Await apply the configured interval and timeout.
