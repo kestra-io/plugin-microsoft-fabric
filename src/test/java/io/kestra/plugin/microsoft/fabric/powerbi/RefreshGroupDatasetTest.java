@@ -61,6 +61,19 @@ class RefreshGroupDatasetTest {
     }
 
     @Test
+    void cachedOAuthTokenIsExcludedFromTaskToString(WireMockRuntimeInfo wm) throws Exception {
+        stubAuth(wm);
+        stubFor(post(urlEqualTo(refreshesPath()))
+            .willReturn(aResponse().withStatus(202).withHeader("requestId", UUID.randomUUID().toString())));
+
+        var task = task(wm).build();
+        task.run(runContextFactory.of());
+
+        assertThat(task.toString(), not(containsString("test-token")));
+        assertThat(task.toString(), not(containsString("secret")));
+    }
+
+    @Test
     void noWaitReturnsRequestIdWithoutPolling(WireMockRuntimeInfo wm) throws Exception {
         stubAuth(wm);
         var requestId = UUID.randomUUID().toString();
