@@ -16,7 +16,6 @@ import io.kestra.core.runners.RunContext;
 import io.kestra.core.serializers.JacksonMapper;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
-import lombok.AccessLevel;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -58,10 +57,6 @@ public abstract class AbstractPowerBi extends Task {
     @PluginProperty(group = "advanced")
     protected HttpConfiguration options;
 
-    @Getter(AccessLevel.NONE)
-    @ToString.Exclude
-    private transient String token;
-
     /**
      * Encode a dynamic value as one URL path segment. Dots are encoded as well so values equal
      * to "." or ".." cannot be interpreted as path traversal segments.
@@ -81,11 +76,7 @@ public abstract class AbstractPowerBi extends Task {
         return API_URL;
     }
 
-    private String token(RunContext runContext) throws IllegalVariableEvaluationException {
-        if (this.token != null) {
-            return this.token;
-        }
-
+    protected String fetchToken(RunContext runContext) throws IllegalVariableEvaluationException {
         var renderedTenantId = runContext.render(this.tenantId).as(String.class).orElseThrow();
         var renderedClientId = runContext.render(this.clientId).as(String.class).orElseThrow();
         var renderedClientSecret = runContext.render(this.clientSecret).as(String.class).orElseThrow();
@@ -116,8 +107,7 @@ public abstract class AbstractPowerBi extends Task {
             if (tokenResponse == null || tokenResponse.get("access_token") == null || tokenResponse.get("access_token").isBlank()) {
                 throw new IllegalStateException("Invalid token request response: missing access_token");
             }
-            this.token = tokenResponse.get("access_token");
-            return this.token;
+            return tokenResponse.get("access_token");
         } catch (HttpClientRequestException | HttpClientResponseException e) {
             throw new RuntimeException("Failed to fetch Power BI access token", e);
         } catch (HttpClientException e) {
@@ -127,8 +117,9 @@ public abstract class AbstractPowerBi extends Task {
         }
     }
 
-    protected <REQ, RES> HttpResponse<RES> request(
+    protected <RES> HttpResponse<RES> request(
         RunContext runContext,
+        String accessToken,
         HttpRequest request,
         Class<RES> responseType
     ) throws HttpClientException, IllegalVariableEvaluationException {
@@ -136,7 +127,7 @@ public abstract class AbstractPowerBi extends Task {
             .uri(request.getUri())
             .method(request.getMethod())
             .body(request.getBody())
-            .addHeader("Authorization", "Bearer " + this.token(runContext))
+            .addHeader("Authorization", "Bearer " + accessToken)
             .addHeader("Content-Type", "application/json")
             .build();
 
