@@ -1,0 +1,8 @@
+group: io.kestra.plugin.microsoft.fabric.powerbi
+name: "powerbi"
+title: "Power BI"
+description: "Tasks to trigger and monitor Power BI dataset refreshes through the Power BI REST API."
+body: "Refresh Power BI datasets while preserving the existing Power BI task configuration and output contract."
+videos: []
+createdBy: "Kestra Core Team"
+managedBy: "Kestra Core Team"
