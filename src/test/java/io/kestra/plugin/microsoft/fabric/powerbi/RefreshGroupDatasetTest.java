@@ -61,7 +61,7 @@ class RefreshGroupDatasetTest {
     }
 
     @Test
-    void cachedOAuthTokenIsExcludedFromTaskToString(WireMockRuntimeInfo wm) throws Exception {
+    void taskToStringDoesNotExposeOAuthTokenOrClientSecret(WireMockRuntimeInfo wm) throws Exception {
         stubAuth(wm);
         stubFor(post(urlEqualTo(refreshesPath()))
             .willReturn(aResponse().withStatus(202).withHeader("requestId", UUID.randomUUID().toString())));
@@ -71,6 +71,29 @@ class RefreshGroupDatasetTest {
 
         assertThat(task.toString(), not(containsString("test-token")));
         assertThat(task.toString(), not(containsString("secret")));
+    }
+
+    @Test
+    void fetchesFreshOAuthTokenForEachExecution(WireMockRuntimeInfo wm) throws Exception {
+        stubFor(post(urlEqualTo("/login/tenant/oauth2/token"))
+            .inScenario("powerbi-token-per-execution")
+            .whenScenarioStateIs(STARTED)
+            .willReturn(okJson("{\"access_token\":\"token-one\"}"))
+            .willSetStateTo("second-token"));
+        stubFor(post(urlEqualTo("/login/tenant/oauth2/token"))
+            .inScenario("powerbi-token-per-execution")
+            .whenScenarioStateIs("second-token")
+            .willReturn(okJson("{\"access_token\":\"token-two\"}")));
+        stubFor(post(urlEqualTo(refreshesPath()))
+            .willReturn(aResponse().withStatus(202).withHeader("requestId", UUID.randomUUID().toString())));
+
+        var task = task(wm).build();
+        task.run(runContextFactory.of());
+        task.run(runContextFactory.of());
+
+        verify(2, postRequestedFor(urlEqualTo("/login/tenant/oauth2/token")));
+        verify(postRequestedFor(urlEqualTo(refreshesPath())).withHeader("Authorization", equalTo("Bearer token-one")));
+        verify(postRequestedFor(urlEqualTo(refreshesPath())).withHeader("Authorization", equalTo("Bearer token-two")));
     }
 
     @Test
