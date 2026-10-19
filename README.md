@@ -25,7 +25,7 @@ This plugin adds Microsoft Fabric and Power BI tasks to [Kestra](https://kestra.
 
 The canonical task type is `io.kestra.plugin.microsoft.fabric.powerbi.RefreshGroupDataset`. Existing flows using the legacy type `io.kestra.plugin.powerbi.RefreshGroupDataset` remain supported through a task alias.
 
-The Power BI refresh task uses Azure service-principal credentials and the Power BI API OAuth resource/scope. Its legacy property names, defaults, and outputs are retained. `notifyOption` is optional and does not alter the request when omitted.
+The Power BI refresh task uses Azure service-principal credentials and the Power BI API OAuth resource/scope. Its legacy property names, defaults, and outputs are retained. `loginUrl` and `apiUrl` default to the public Microsoft identity and Power BI API endpoints and can be overridden for supported sovereign-cloud endpoints. `notifyOption` is optional and does not alter the request when omitted. During `wait: true`, a 401 polling response triggers one OAuth token refresh and a single retry for that poll.
 
 ## Example
 
