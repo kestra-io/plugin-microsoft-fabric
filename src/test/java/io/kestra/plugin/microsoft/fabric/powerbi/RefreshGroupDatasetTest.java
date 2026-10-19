@@ -61,6 +61,24 @@ class RefreshGroupDatasetTest {
     }
 
     @Test
+    void supportsConfiguredOAuthResourceAndScope(WireMockRuntimeInfo wm) throws Exception {
+        stubFor(post(urlEqualTo("/login/tenant/oauth2/token"))
+            .willReturn(okJson("{\"access_token\":\"test-token\"}")));
+        stubFor(post(urlEqualTo(refreshesPath()))
+            .willReturn(aResponse().withStatus(202).withHeader("requestId", UUID.randomUUID().toString())));
+
+        task(wm)
+            .oauthResource(Property.ofValue("https://analysis.gov.example/powerbi/api"))
+            .oauthScope(Property.ofValue("https://analysis.gov.example/powerbi/api/.default"))
+            .build()
+            .run(runContextFactory.of());
+
+        verify(postRequestedFor(urlEqualTo("/login/tenant/oauth2/token"))
+            .withRequestBody(containing("resource=https%3A%2F%2Fanalysis.gov.example%2Fpowerbi%2Fapi"))
+            .withRequestBody(containing("scope=https%3A%2F%2Fanalysis.gov.example%2Fpowerbi%2Fapi%2F.default")));
+    }
+
+    @Test
     void taskToStringDoesNotExposeOAuthTokenOrClientSecret(WireMockRuntimeInfo wm) throws Exception {
         stubAuth(wm);
         stubFor(post(urlEqualTo(refreshesPath()))
