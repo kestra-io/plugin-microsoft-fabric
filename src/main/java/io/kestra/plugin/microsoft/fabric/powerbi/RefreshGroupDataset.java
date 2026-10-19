@@ -82,19 +82,19 @@ public class RefreshGroupDataset extends AbstractPowerBi implements RunnableTask
         description = "Defaults to `false`. When `true`, polls the refresh status and fails if the final status is not `Completed`."
     )
     @NotNull
-    @lombok.Builder.Default
+    @Builder.Default
     @PluginProperty(group = "execution")
     private Property<Boolean> wait = Property.ofValue(false);
 
     @Schema(title = "Polling interval", description = "Delay between status checks when `wait` is true; defaults to 5 seconds.")
     @NotNull
-    @lombok.Builder.Default
+    @Builder.Default
     @PluginProperty(group = "execution")
     private final Property<Duration> pollDuration = Property.ofValue(Duration.ofSeconds(5));
 
     @Schema(title = "Refresh wait timeout", description = "Maximum time to wait for completion when `wait` is true; defaults to 10 minutes.")
     @NotNull
-    @lombok.Builder.Default
+    @Builder.Default
     @PluginProperty(group = "execution")
     private final Property<Duration> waitDuration = Property.ofValue(Duration.ofMinutes(10));
 
