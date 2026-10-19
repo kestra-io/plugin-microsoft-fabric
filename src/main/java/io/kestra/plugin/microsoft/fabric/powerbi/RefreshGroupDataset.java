@@ -1,7 +1,6 @@
 package io.kestra.plugin.microsoft.fabric.powerbi;
 
 import io.kestra.core.http.HttpRequest;
-import io.kestra.core.http.HttpResponse;
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
 import io.kestra.core.models.annotations.PluginProperty;
@@ -14,6 +13,7 @@ import io.kestra.plugin.microsoft.fabric.powerbi.models.Refresh;
 import io.kestra.plugin.microsoft.fabric.powerbi.models.Refreshes;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
+import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static io.kestra.core.utils.Rethrow.throwSupplier;
 
@@ -107,33 +108,33 @@ public class RefreshGroupDataset extends AbstractPowerBi implements RunnableTask
     @Override
     public Output run(RunContext runContext) throws Exception {
         var logger = runContext.logger();
-        var renderedGroupId = runContext.render(groupId).as(String.class).orElseThrow();
-        var renderedDatasetId = runContext.render(datasetId).as(String.class).orElseThrow();
-        var refreshesUrl = apiUrl() + "/v1.0/myorg/groups/" + encodePathSegment(renderedGroupId)
-            + "/datasets/" + encodePathSegment(renderedDatasetId) + "/refreshes";
+        var rGroupId = runContext.render(groupId).as(String.class)
+            .orElseThrow(() -> new IllegalArgumentException("groupId is required"));
+        var rDatasetId = runContext.render(datasetId).as(String.class)
+            .orElseThrow(() -> new IllegalArgumentException("datasetId is required"));
+        var rApiUrl = apiBaseUrl(runContext);
+        var refreshesUrl = rApiUrl + "/v1.0/myorg/groups/" + encodePathSegment(rGroupId)
+            + "/datasets/" + encodePathSegment(rDatasetId) + "/refreshes";
 
         var postRequestBuilder = HttpRequest.builder()
             .uri(URI.create(refreshesUrl))
             .method("POST");
         if (notifyOption != null) {
-            var renderedNotifyOption = runContext.render(notifyOption).as(NotifyOption.class).orElse(null);
-            if (renderedNotifyOption != null) {
+            var rNotifyOption = runContext.render(notifyOption).as(NotifyOption.class).orElse(null);
+            if (rNotifyOption != null) {
                 var body = new HashMap<String, Object>();
-                body.put("notifyOption", renderedNotifyOption.name());
+                body.put("notifyOption", rNotifyOption.name());
                 postRequestBuilder.body(HttpRequest.JsonRequestBody.builder().content(body).build());
             }
         }
 
-        var accessToken = fetchToken(runContext);
-        HttpResponse<String> response = request(runContext, accessToken, postRequestBuilder.build(), String.class);
+        var accessToken = new AtomicReference<>(fetchToken(runContext));
+        var response = request(runContext, accessToken.get(), postRequestBuilder.build(), String.class);
         if (response.getStatus().getCode() < 200 || response.getStatus().getCode() >= 300) {
             throw new IllegalStateException("Power BI refresh request failed with HTTP " + response.getStatus().getCode() + ": " + response.getBody());
         }
 
-        // Keep the legacy header first, but also accept the documented Power BI async-operation
-        // headers. The Location resource identifies the refresh itself; x-ms-request-id is the
-        // fallback when the service does not return a Location header.
-        Optional<String> refreshId = response.getHeaders().firstValue("requestId")
+        var refreshId = response.getHeaders().firstValue("requestId")
             .filter(id -> !id.isBlank())
             .or(() -> response.getHeaders().firstValue("Location").flatMap(RefreshGroupDataset::requestIdFromLocation))
             .or(() -> response.getHeaders().firstValue("x-ms-request-id").filter(id -> !id.isBlank()));
@@ -144,21 +145,22 @@ public class RefreshGroupDataset extends AbstractPowerBi implements RunnableTask
         }
 
         logger.info("Power BI refresh created with request id '{}'", refreshId.get());
-        if (!runContext.render(wait).as(Boolean.class).orElse(false)) {
+        var rWait = runContext.render(wait).as(Boolean.class).orElse(false);
+        if (!rWait) {
             return Output.builder().requestId(refreshId.get()).build();
         }
 
-        Duration renderedPollDuration = runContext.render(pollDuration).as(Duration.class).orElse(Duration.ofSeconds(5));
-        Duration renderedWaitDuration = runContext.render(waitDuration).as(Duration.class).orElse(Duration.ofMinutes(10));
+        var rPollDuration = runContext.render(pollDuration).as(Duration.class).orElse(Duration.ofSeconds(5));
+        var rWaitDuration = runContext.render(waitDuration).as(Duration.class).orElse(Duration.ofMinutes(10));
         Refresh result;
         try {
             result = Await.until(
                 throwSupplier(() -> pollRefresh(runContext, accessToken, refreshesUrl, refreshId.get(), loggerTraceEnabled(runContext))),
-                renderedPollDuration,
-                renderedWaitDuration
+                rPollDuration,
+                rWaitDuration
             );
         } catch (TimeoutException e) {
-            throw new TimeoutException("Power BI refresh '" + refreshId.get() + "' did not complete within " + renderedWaitDuration);
+            throw new TimeoutException("Power BI refresh '" + refreshId.get() + "' did not complete within " + rWaitDuration);
         }
 
         if (result.status() == null || !"completed".equals(result.status().toLowerCase(Locale.ROOT))) {
@@ -174,15 +176,14 @@ public class RefreshGroupDataset extends AbstractPowerBi implements RunnableTask
             .endTime(result.endTime())
             .build();
     }
-
     private static Optional<String> requestIdFromLocation(String location) {
         try {
-            String path = URI.create(location).getRawPath();
+            var path = URI.create(location).getRawPath();
             if (path == null) {
                 return Optional.empty();
             }
 
-            String[] segments = path.split("/");
+            var segments = path.split("/");
             if (segments.length < 2
                 || !"refreshes".equals(segments[segments.length - 2])
                 || segments[segments.length - 1].isBlank()) {
@@ -191,7 +192,6 @@ public class RefreshGroupDataset extends AbstractPowerBi implements RunnableTask
 
             return Optional.of(segments[segments.length - 1]);
         } catch (IllegalArgumentException e) {
-            // Ignore malformed Location headers and continue to the x-ms-request-id fallback.
             return Optional.empty();
         }
     }
@@ -200,15 +200,18 @@ public class RefreshGroupDataset extends AbstractPowerBi implements RunnableTask
         return runContext.logger().isTraceEnabled();
     }
 
-    private Refresh pollRefresh(RunContext runContext, String accessToken, String refreshesUrl, String refreshId, boolean traceEnabled)
+    private Refresh pollRefresh(RunContext runContext, AtomicReference<String> accessToken, String refreshesUrl, String refreshId, boolean traceEnabled)
         throws Exception {
-        HttpRequest getRequest = HttpRequest.builder().uri(URI.create(refreshesUrl)).method("GET").build();
-        // Read as text first so non-JSON throttling/error bodies cannot fail deserialization before we
-        // inspect the HTTP status.
-        HttpResponse<String> response = request(runContext, accessToken, getRequest, String.class);
-        int statusCode = response.getStatus().getCode();
+        var getRequest = HttpRequest.builder().uri(URI.create(refreshesUrl)).method("GET").build();
+        var response = request(runContext, accessToken.get(), getRequest, String.class);
+        var statusCode = response.getStatus().getCode();
 
-        // A throttled poll did not return refresh state. Let Await apply the configured interval and timeout.
+        if (statusCode == 401) {
+            runContext.logger().warn("Power BI refresh polling received HTTP 401; refreshing the access token and retrying once");
+            accessToken.set(fetchToken(runContext));
+            response = request(runContext, accessToken.get(), getRequest, String.class);
+            statusCode = response.getStatus().getCode();
+        }
         if (statusCode == 429) {
             runContext.logger().warn("Power BI throttled refresh-status polling; retrying after the configured poll interval");
             return null;
@@ -217,10 +220,10 @@ public class RefreshGroupDataset extends AbstractPowerBi implements RunnableTask
             throw new IllegalStateException("Power BI refresh-status polling failed with HTTP " + statusCode + ": " + response.getBody());
         }
 
-        Refreshes refreshes = response.getBody() == null || response.getBody().isBlank()
+        var refreshes = response.getBody() == null || response.getBody().isBlank()
             ? null
             : JacksonMapper.ofJson().readValue(response.getBody(), Refreshes.class);
-        Optional<Refresh> refresh = Optional.ofNullable(refreshes)
+        var refresh = Optional.ofNullable(refreshes)
             .map(Refreshes::value)
             .stream()
             .flatMap(List::stream)
@@ -232,7 +235,7 @@ public class RefreshGroupDataset extends AbstractPowerBi implements RunnableTask
             return null;
         }
 
-        Refresh current = refresh.get();
+        var current = refresh.get();
         if (traceEnabled) {
             runContext.logger().trace("Power BI refresh: {}", current);
         }
@@ -241,14 +244,13 @@ public class RefreshGroupDataset extends AbstractPowerBi implements RunnableTask
         }
         return current;
     }
-
     public enum NotifyOption {
         NoNotification,
         MailOnFailure,
         MailOnCompletion
     }
 
-    @lombok.Builder
+    @Builder
     @Getter
     public static class Output implements io.kestra.core.models.tasks.Output {
         @Schema(title = "Refresh request ID", description = "Always returned, even when `wait` is `false`.")
