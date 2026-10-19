@@ -134,6 +134,7 @@ public class RefreshGroupDataset extends AbstractPowerBi implements RunnableTask
             throw new IllegalStateException("Power BI refresh request failed with HTTP " + response.getStatus().getCode() + ": " + response.getBody());
         }
 
+        // Prefer the legacy header, then the documented response-header fallbacks.
         var refreshId = response.getHeaders().firstValue("requestId")
             .filter(id -> !id.isBlank())
             .or(() -> response.getHeaders().firstValue("Location").flatMap(RefreshGroupDataset::requestIdFromLocation))
@@ -203,6 +204,7 @@ public class RefreshGroupDataset extends AbstractPowerBi implements RunnableTask
     private Refresh pollRefresh(RunContext runContext, AtomicReference<String> accessToken, String refreshesUrl, String refreshId, boolean traceEnabled)
         throws Exception {
         var getRequest = HttpRequest.builder().uri(URI.create(refreshesUrl)).method("GET").build();
+        // Read as text so status handling does not depend on error bodies being valid JSON.
         var response = request(runContext, accessToken.get(), getRequest, String.class);
         var statusCode = response.getStatus().getCode();
 
