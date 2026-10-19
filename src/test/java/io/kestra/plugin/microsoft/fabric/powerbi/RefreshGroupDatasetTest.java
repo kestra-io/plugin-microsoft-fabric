@@ -3,6 +3,7 @@ package io.kestra.plugin.microsoft.fabric.powerbi;
 import com.github.tomakehurst.wiremock.junit5.WireMockRuntimeInfo;
 import com.github.tomakehurst.wiremock.junit5.WireMockTest;
 import io.kestra.core.junit.annotations.KestraTest;
+import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.runners.RunContextFactory;
 import io.kestra.core.storages.StorageInterface;
@@ -12,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
 import java.time.Duration;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.TimeoutException;
 
@@ -76,6 +78,44 @@ class RefreshGroupDatasetTest {
         verify(postRequestedFor(urlEqualTo("/login/tenant/oauth2/token"))
             .withRequestBody(containing("resource=https%3A%2F%2Fanalysis.gov.example%2Fpowerbi%2Fapi"))
             .withRequestBody(containing("scope=https%3A%2F%2Fanalysis.gov.example%2Fpowerbi%2Fapi%2F.default")));
+    }
+
+    @Test
+    void emptyOAuthSettingsFallBackToPublicCloudDefaults(WireMockRuntimeInfo wm) throws Exception {
+        stubFor(post(urlEqualTo("/login/tenant/oauth2/token"))
+            .willReturn(okJson("{\\"access_token\\":\\"test-token\\"}")));
+        stubFor(post(urlEqualTo(refreshesPath()))
+            .willReturn(aResponse().withStatus(202).withHeader("requestId", UUID.randomUUID().toString())));
+
+        task(wm)
+            .oauthResource(Property.ofValue(""))
+            .oauthScope(Property.ofValue(""))
+            .build()
+            .run(runContextFactory.of());
+
+        verify(postRequestedFor(urlEqualTo("/login/tenant/oauth2/token"))
+            .withRequestBody(containing("resource=https%3A%2F%2Fanalysis.windows.net%2Fpowerbi%2Fapi"))
+            .withRequestBody(containing("scope=https%3A%2F%2Fanalysis.windows.net%2Fpowerbi%2Fapi%2F.default")));
+    }
+
+    @Test
+    void emptyEndpointSettingsFallBackToPublicCloudDefaults(WireMockRuntimeInfo wm) throws Exception {
+        var rContext = runContextFactory.of();
+        var configuredTask = task(wm)
+            .loginUrl(Property.ofValue(""))
+            .apiUrl(Property.ofValue("   "))
+            .build();
+
+        assertThat(configuredTask.loginBaseUrl(rContext), is("https://login.microsoftonline.com"));
+        assertThat(configuredTask.apiBaseUrl(rContext), is("https://api.powerbi.com"));
+    }
+
+    @Test
+    void endpointAndOAuthPropertiesBelongToConnectionGroup() throws Exception {
+        for (var fieldName : List.of("loginUrl", "apiUrl", "oauthResource", "oauthScope")) {
+            var annotation = AbstractPowerBi.class.getDeclaredField(fieldName).getAnnotation(PluginProperty.class);
+            assertThat(fieldName + " group", annotation.group(), is("connection"));
+        }
     }
 
     @Test
