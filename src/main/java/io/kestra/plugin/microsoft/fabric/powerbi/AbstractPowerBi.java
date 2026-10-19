@@ -92,11 +92,11 @@ public abstract class AbstractPowerBi extends Task {
     }
 
     String loginBaseUrl(RunContext runContext) throws IllegalVariableEvaluationException {
-        return renderBaseUrl(runContext, loginUrl, DEFAULT_LOGIN_URL, "loginUrl");
+        return renderBaseUrl(runContext, loginUrl, DEFAULT_LOGIN_URL);
     }
 
     String apiBaseUrl(RunContext runContext) throws IllegalVariableEvaluationException {
-        return renderBaseUrl(runContext, apiUrl, DEFAULT_API_URL, "apiUrl");
+        return renderBaseUrl(runContext, apiUrl, DEFAULT_API_URL);
     }
 
     String fetchToken(RunContext runContext) throws IllegalVariableEvaluationException {
@@ -106,8 +106,12 @@ public abstract class AbstractPowerBi extends Task {
             .orElseThrow(() -> new IllegalArgumentException("clientId is required"));
         var rClientSecret = runContext.render(this.clientSecret).as(String.class)
             .orElseThrow(() -> new IllegalArgumentException("clientSecret is required"));
-        var rOAuthResource = runContext.render(oauthResource).as(String.class).orElse(DEFAULT_OAUTH_RESOURCE);
-        var rOAuthScope = runContext.render(oauthScope).as(String.class).orElse(DEFAULT_OAUTH_SCOPE);
+        var rOAuthResource = oauthResource == null
+            ? DEFAULT_OAUTH_RESOURCE
+            : runContext.render(oauthResource).as(String.class).filter(value -> !value.isBlank()).orElse(DEFAULT_OAUTH_RESOURCE);
+        var rOAuthScope = oauthScope == null
+            ? DEFAULT_OAUTH_SCOPE
+            : runContext.render(oauthScope).as(String.class).filter(value -> !value.isBlank()).orElse(DEFAULT_OAUTH_SCOPE);
         var rLoginUrl = loginBaseUrl(runContext);
         var uri = URI.create(rLoginUrl + "/" + encodePathSegment(rTenantId) + "/oauth2/token");
 
@@ -167,7 +171,7 @@ public abstract class AbstractPowerBi extends Task {
         }
     }
 
-    private String renderBaseUrl(RunContext runContext, Property<String> endpoint, String defaultUrl, String propertyName)
+    private String renderBaseUrl(RunContext runContext, Property<String> endpoint, String defaultUrl)
         throws IllegalVariableEvaluationException {
         if (endpoint == null) {
             return defaultUrl;
