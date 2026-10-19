@@ -70,6 +70,7 @@ public abstract class AbstractPowerBi extends Task {
     @PluginProperty(group = "advanced")
     protected HttpConfiguration options;
 
+    // Encode dots as well so literal "." and ".." cannot become traversal segments.
     protected static String encodePathSegment(String value) {
         return URLEncoder.encode(value, StandardCharsets.UTF_8)
             .replace("+", "%20")
@@ -168,6 +169,7 @@ public abstract class AbstractPowerBi extends Task {
 
     private HttpConfiguration httpConfiguration() {
         var base = options == null ? HttpConfiguration.builder().build() : options;
+        // The Power BI bearer token is applied explicitly by request().
         return base.toBuilder().auth(null).build();
     }
 }
