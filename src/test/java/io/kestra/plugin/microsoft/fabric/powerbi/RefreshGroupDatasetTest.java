@@ -83,13 +83,13 @@ class RefreshGroupDatasetTest {
     @Test
     void emptyOAuthSettingsFallBackToPublicCloudDefaults(WireMockRuntimeInfo wm) throws Exception {
         stubFor(post(urlEqualTo("/login/tenant/oauth2/token"))
-            .willReturn(okJson("{\\"access_token\\":\\"test-token\\"}")));
+            .willReturn(okJson("{\"access_token\":\"test-token\"}")));
         stubFor(post(urlEqualTo(refreshesPath()))
             .willReturn(aResponse().withStatus(202).withHeader("requestId", UUID.randomUUID().toString())));
 
         task(wm)
             .oauthResource(Property.ofValue(""))
-            .oauthScope(Property.ofValue(""))
+            .oauthScope(null)
             .build()
             .run(runContextFactory.of());
 
