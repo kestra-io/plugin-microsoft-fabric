@@ -37,6 +37,8 @@ import java.util.Map;
 public abstract class AbstractPowerBi extends Task {
     private static final String DEFAULT_LOGIN_URL = "https://login.microsoftonline.com";
     private static final String DEFAULT_API_URL = "https://api.powerbi.com";
+    private static final String DEFAULT_OAUTH_RESOURCE = "https://analysis.windows.net/powerbi/api";
+    private static final String DEFAULT_OAUTH_SCOPE = "https://analysis.windows.net/powerbi/api/.default";
 
     @NotNull
     @Schema(title = "Azure tenant ID")
@@ -66,6 +68,18 @@ public abstract class AbstractPowerBi extends Task {
     @Builder.Default
     private Property<String> apiUrl = Property.ofValue(DEFAULT_API_URL);
 
+    @NotNull
+    @Schema(title = "Power BI OAuth resource", description = "Resource requested from Microsoft identity. Defaults to the public-cloud Power BI resource.")
+    @PluginProperty(group = "advanced")
+    @Builder.Default
+    private Property<String> oauthResource = Property.ofValue(DEFAULT_OAUTH_RESOURCE);
+
+    @NotNull
+    @Schema(title = "Power BI OAuth scope", description = "Scope requested from Microsoft identity. Defaults to the public-cloud Power BI scope.")
+    @PluginProperty(group = "advanced")
+    @Builder.Default
+    private Property<String> oauthScope = Property.ofValue(DEFAULT_OAUTH_SCOPE);
+
     @Schema(title = "The HTTP client configuration")
     @PluginProperty(group = "advanced")
     protected HttpConfiguration options;
@@ -88,6 +102,10 @@ public abstract class AbstractPowerBi extends Task {
             .orElseThrow(() -> new IllegalArgumentException("clientId is required"));
         var rClientSecret = runContext.render(this.clientSecret).as(String.class)
             .orElseThrow(() -> new IllegalArgumentException("clientSecret is required"));
+        var rOAuthResource = runContext.render(oauthResource).as(String.class)
+            .orElseThrow(() -> new IllegalArgumentException("oauthResource is required"));
+        var rOAuthScope = runContext.render(oauthScope).as(String.class)
+            .orElseThrow(() -> new IllegalArgumentException("oauthScope is required"));
         var rLoginUrl = renderBaseUrl(runContext, loginUrl, DEFAULT_LOGIN_URL, "loginUrl");
         var uri = URI.create(rLoginUrl + "/" + encodePathSegment(rTenantId) + "/oauth2/token");
 
@@ -101,8 +119,8 @@ public abstract class AbstractPowerBi extends Task {
                             "grant_type", "client_credentials",
                             "client_id", rClientId,
                             "client_secret", rClientSecret,
-                            "resource", "https://analysis.windows.net/powerbi/api",
-                            "scope", "https://analysis.windows.net/powerbi/api/.default"
+                            "resource", rOAuthResource,
+                            "scope", rOAuthScope
                         )
                     )
                     .build()
