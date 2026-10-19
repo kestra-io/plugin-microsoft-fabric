@@ -16,6 +16,7 @@ import io.kestra.core.runners.RunContext;
 import io.kestra.core.serializers.JacksonMapper;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
+import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -34,8 +35,8 @@ import java.util.Map;
 @Getter
 @NoArgsConstructor
 public abstract class AbstractPowerBi extends Task {
-    private static final String LOGIN_URL = "https://login.microsoftonline.com";
-    private static final String API_URL = "https://api.powerbi.com";
+    private static final String DEFAULT_LOGIN_URL = "https://login.microsoftonline.com";
+    private static final String DEFAULT_API_URL = "https://api.powerbi.com";
 
     @NotNull
     @Schema(title = "Azure tenant ID")
@@ -53,36 +54,43 @@ public abstract class AbstractPowerBi extends Task {
     @ToString.Exclude
     private Property<String> clientSecret;
 
+    @NotNull
+    @Schema(title = "Microsoft identity endpoint", description = "Base URL for OAuth token requests. Defaults to https://login.microsoftonline.com.")
+    @PluginProperty(group = "advanced")
+    @Builder.Default
+    private Property<String> loginUrl = Property.ofValue(DEFAULT_LOGIN_URL);
+
+    @NotNull
+    @Schema(title = "Power BI API endpoint", description = "Base URL for Power BI REST requests. Defaults to https://api.powerbi.com.")
+    @PluginProperty(group = "advanced")
+    @Builder.Default
+    private Property<String> apiUrl = Property.ofValue(DEFAULT_API_URL);
+
     @Schema(title = "The HTTP client configuration")
     @PluginProperty(group = "advanced")
     protected HttpConfiguration options;
 
-    /**
-     * Encode a dynamic value as one URL path segment. Dots are encoded as well so values equal
-     * to "." or ".." cannot be interpreted as path traversal segments.
-     */
     protected static String encodePathSegment(String value) {
         return URLEncoder.encode(value, StandardCharsets.UTF_8)
             .replace("+", "%20")
             .replace(".", "%2E");
     }
 
-    /** Override points allow tests to exercise the same auth flow against WireMock. */
-    protected String loginUrl() {
-        return LOGIN_URL;
+    String apiBaseUrl(RunContext runContext) throws IllegalVariableEvaluationException {
+        return renderBaseUrl(runContext, apiUrl, DEFAULT_API_URL, "apiUrl");
     }
 
-    protected String apiUrl() {
-        return API_URL;
-    }
+    String fetchToken(RunContext runContext) throws IllegalVariableEvaluationException {
+        var rTenantId = runContext.render(this.tenantId).as(String.class)
+            .orElseThrow(() -> new IllegalArgumentException("tenantId is required"));
+        var rClientId = runContext.render(this.clientId).as(String.class)
+            .orElseThrow(() -> new IllegalArgumentException("clientId is required"));
+        var rClientSecret = runContext.render(this.clientSecret).as(String.class)
+            .orElseThrow(() -> new IllegalArgumentException("clientSecret is required"));
+        var rLoginUrl = renderBaseUrl(runContext, loginUrl, DEFAULT_LOGIN_URL, "loginUrl");
+        var uri = URI.create(rLoginUrl + "/" + encodePathSegment(rTenantId) + "/oauth2/token");
 
-    protected String fetchToken(RunContext runContext) throws IllegalVariableEvaluationException {
-        var renderedTenantId = runContext.render(this.tenantId).as(String.class).orElseThrow();
-        var renderedClientId = runContext.render(this.clientId).as(String.class).orElseThrow();
-        var renderedClientSecret = runContext.render(this.clientSecret).as(String.class).orElseThrow();
-        URI uri = URI.create(loginUrl() + "/" + encodePathSegment(renderedTenantId) + "/oauth2/token");
-
-        HttpRequest request = HttpRequest.builder()
+        var request = HttpRequest.builder()
             .uri(uri)
             .method("POST")
             .body(
@@ -90,8 +98,8 @@ public abstract class AbstractPowerBi extends Task {
                     .content(
                         Map.of(
                             "grant_type", "client_credentials",
-                            "client_id", renderedClientId,
-                            "client_secret", renderedClientSecret,
+                            "client_id", rClientId,
+                            "client_secret", rClientSecret,
                             "resource", "https://analysis.windows.net/powerbi/api",
                             "scope", "https://analysis.windows.net/powerbi/api/.default"
                         )
@@ -102,7 +110,7 @@ public abstract class AbstractPowerBi extends Task {
             .build();
 
         try (HttpClient client = new HttpClient(runContext, httpConfiguration())) {
-            HttpResponse<String> exchange = client.request(request, String.class);
+            var exchange = client.request(request, String.class);
             Map<String, String> tokenResponse = JacksonMapper.ofJson().readValue(exchange.getBody(), new TypeReference<>() {});
             if (tokenResponse == null || tokenResponse.get("access_token") == null || tokenResponse.get("access_token").isBlank()) {
                 throw new IllegalStateException("Invalid token request response: missing access_token");
@@ -117,7 +125,7 @@ public abstract class AbstractPowerBi extends Task {
         }
     }
 
-    protected <RES> HttpResponse<RES> request(
+    <RES> HttpResponse<RES> request(
         RunContext runContext,
         String accessToken,
         HttpRequest request,
@@ -138,25 +146,28 @@ public abstract class AbstractPowerBi extends Task {
         }
     }
 
-    /**
-     * Return HTTP error responses to the task so it can apply operation-specific handling. The
-     * normal request path fails on 4xx/5xx before exposing the status, which would make it
-     * impossible to handle Power BI HTTP 429 while polling. Status validation is therefore
-     * owned by this task rather than the generic client's allowed-response-code configuration.
-     */
+    private String renderBaseUrl(RunContext runContext, Property<String> endpoint, String defaultUrl, String propertyName)
+        throws IllegalVariableEvaluationException {
+        if (endpoint == null) {
+            return defaultUrl;
+        }
+        var rBaseUrl = runContext.render(endpoint).as(String.class)
+            .filter(value -> !value.isBlank())
+            .orElseThrow(() -> new IllegalArgumentException(propertyName + " must resolve to a non-empty URL"));
+        return rBaseUrl.replaceAll("/+$", "");
+    }
+
     private HttpConfiguration responseConfiguration() {
+        // allowFailed exposes 401/429 so the task can handle status codes itself.
         return httpConfiguration().toBuilder()
             .allowFailed(Property.ofValue(true))
             .allowedResponseCodes(null)
-            // Keep this last: a copied default HTTP configuration can synthesize Basic auth.
             .auth(null)
             .build();
     }
 
-    /** Power BI uses its own OAuth token; do not attach the HTTP client's default Basic auth. */
     private HttpConfiguration httpConfiguration() {
-        HttpConfiguration base = options == null ? HttpConfiguration.builder().build() : options;
+        var base = options == null ? HttpConfiguration.builder().build() : options;
         return base.toBuilder().auth(null).build();
     }
-
 }
