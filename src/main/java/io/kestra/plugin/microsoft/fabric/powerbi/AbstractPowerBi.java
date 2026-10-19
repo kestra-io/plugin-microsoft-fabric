@@ -58,25 +58,25 @@ public abstract class AbstractPowerBi extends Task {
 
     @NotNull
     @Schema(title = "Microsoft identity endpoint", description = "Base URL for OAuth token requests. Defaults to https://login.microsoftonline.com.")
-    @PluginProperty(group = "advanced")
+    @PluginProperty(group = "connection")
     @Builder.Default
     private Property<String> loginUrl = Property.ofValue(DEFAULT_LOGIN_URL);
 
     @NotNull
     @Schema(title = "Power BI API endpoint", description = "Base URL for Power BI REST requests. Defaults to https://api.powerbi.com.")
-    @PluginProperty(group = "advanced")
+    @PluginProperty(group = "connection")
     @Builder.Default
     private Property<String> apiUrl = Property.ofValue(DEFAULT_API_URL);
 
     @NotNull
     @Schema(title = "Power BI OAuth resource", description = "Resource requested from Microsoft identity. Defaults to the public-cloud Power BI resource.")
-    @PluginProperty(group = "advanced")
+    @PluginProperty(group = "connection")
     @Builder.Default
     private Property<String> oauthResource = Property.ofValue(DEFAULT_OAUTH_RESOURCE);
 
     @NotNull
     @Schema(title = "Power BI OAuth scope", description = "Scope requested from Microsoft identity. Defaults to the public-cloud Power BI scope.")
-    @PluginProperty(group = "advanced")
+    @PluginProperty(group = "connection")
     @Builder.Default
     private Property<String> oauthScope = Property.ofValue(DEFAULT_OAUTH_SCOPE);
 
@@ -91,6 +91,10 @@ public abstract class AbstractPowerBi extends Task {
             .replace(".", "%2E");
     }
 
+    String loginBaseUrl(RunContext runContext) throws IllegalVariableEvaluationException {
+        return renderBaseUrl(runContext, loginUrl, DEFAULT_LOGIN_URL, "loginUrl");
+    }
+
     String apiBaseUrl(RunContext runContext) throws IllegalVariableEvaluationException {
         return renderBaseUrl(runContext, apiUrl, DEFAULT_API_URL, "apiUrl");
     }
@@ -102,11 +106,9 @@ public abstract class AbstractPowerBi extends Task {
             .orElseThrow(() -> new IllegalArgumentException("clientId is required"));
         var rClientSecret = runContext.render(this.clientSecret).as(String.class)
             .orElseThrow(() -> new IllegalArgumentException("clientSecret is required"));
-        var rOAuthResource = runContext.render(oauthResource).as(String.class)
-            .orElseThrow(() -> new IllegalArgumentException("oauthResource is required"));
-        var rOAuthScope = runContext.render(oauthScope).as(String.class)
-            .orElseThrow(() -> new IllegalArgumentException("oauthScope is required"));
-        var rLoginUrl = renderBaseUrl(runContext, loginUrl, DEFAULT_LOGIN_URL, "loginUrl");
+        var rOAuthResource = runContext.render(oauthResource).as(String.class).orElse(DEFAULT_OAUTH_RESOURCE);
+        var rOAuthScope = runContext.render(oauthScope).as(String.class).orElse(DEFAULT_OAUTH_SCOPE);
+        var rLoginUrl = loginBaseUrl(runContext);
         var uri = URI.create(rLoginUrl + "/" + encodePathSegment(rTenantId) + "/oauth2/token");
 
         var request = HttpRequest.builder()
@@ -172,7 +174,7 @@ public abstract class AbstractPowerBi extends Task {
         }
         var rBaseUrl = runContext.render(endpoint).as(String.class)
             .filter(value -> !value.isBlank())
-            .orElseThrow(() -> new IllegalArgumentException(propertyName + " must resolve to a non-empty URL"));
+            .orElse(defaultUrl);
         return rBaseUrl.replaceAll("/+$", "");
     }
 
