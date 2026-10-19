@@ -38,8 +38,9 @@ Power BI dataset refresh uses the Power BI REST API's authentication resource/sc
 - `pollDuration` defaults to `PT5S` and controls refresh-history polling when `wait: true`.
 - `waitDuration` defaults to `PT10M` and bounds the wait for a terminal refresh result.
 - `options` accepts the common Kestra HTTP client configuration.
+- `loginUrl` defaults to `https://login.microsoftonline.com`; `apiUrl` defaults to `https://api.powerbi.com`. Override these advanced properties for supported sovereign-cloud endpoints or controlled test environments.
 - `notifyOption` is optional. When omitted, no notification body is added to preserve legacy request behavior. Supported values are `NoNotification`, `MailOnFailure`, and `MailOnCompletion`.
 
-When waiting, output also includes `status`, `extendedStatus`, `refreshType`, `startTime`, and `endTime`. The task succeeds only when the final status is `Completed`. HTTP 429 responses while polling are retried using `pollDuration` and remain bounded by `waitDuration`.
+When waiting, output also includes `status`, `extendedStatus`, `refreshType`, `startTime`, and `endTime`. The task succeeds only when the final status is `Completed`. HTTP 429 responses are retried using `pollDuration` and remain bounded by `waitDuration`. If polling receives HTTP 401, the task refreshes the OAuth token and retries that poll once.
 
 The canonical task type is `io.kestra.plugin.microsoft.fabric.powerbi.RefreshGroupDataset`. The former `io.kestra.plugin.powerbi.RefreshGroupDataset` task type is retained as a plugin alias so existing flows can continue to resolve after the standalone Power BI plugin is retired.
