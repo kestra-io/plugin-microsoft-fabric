@@ -1,10 +1,12 @@
 # How to use the Microsoft Fabric plugin
 
-Interact with Microsoft Fabric — OneLake storage, Warehouse SQL, notebooks, Spark jobs, and pipelines — from Kestra flows.
+Interact with Microsoft Fabric — OneLake storage, Warehouse SQL, notebooks, Spark jobs, pipelines, and Power BI dataset refreshes — from Kestra flows.
 
 ## Authentication
 
-Set `tenantId`, `clientId`, and `clientSecret` for service principal authentication. If all three are provided, the plugin uses `ClientSecretCredential`; otherwise it falls back to `DefaultAzureCredential`. Store secrets in [secrets](https://kestra.io/docs/concepts/secret) and set connection properties on each task.
+Most Fabric tasks use `tenantId`, `clientId`, and `clientSecret` for service principal authentication. When all three are provided, the plugin uses `ClientSecretCredential`; otherwise it falls back to `DefaultAzureCredential`. Store secrets in [secrets](https://kestra.io/docs/concepts/secret).
+
+Power BI dataset refresh uses the Power BI REST API's authentication resource/scope (`https://analysis.windows.net/powerbi/api`) and retains the legacy `tenantId`, `clientId`, and `clientSecret` fields, rather than reusing the Microsoft Fabric REST API token scope.
 
 ## Tasks
 
@@ -18,12 +20,28 @@ Set `tenantId`, `clientId`, and `clientSecret` for service principal authenticat
 
 ### Warehouse
 
-`warehouse.Query` runs a SQL query against a Fabric Warehouse — set `sqlEndpointId`, `warehouseId`, and `sql` (all required). Set `fetchType` (default `STORE`) to control output: `STORE` writes to internal storage and returns a `uri`, `FETCH` returns `rows`, `FETCH_ONE` returns a single `row`. The output also includes `size`.
+`warehouse.Query` runs a SQL query against a Fabric Warehouse — set `sqlEndpointId`, `warehouseId`, and `sql` (all required). Set `fetchType` (default `STORE`) to control output: `STORE` writes to internal storage and returns a `uri`, `FETCH` returns `rows`, and `FETCH_ONE` returns a single `row`. The output also includes `size`.
 
 ### Data Engineering
 
 `data.engineering.RunNotebook` runs a Fabric notebook — set `workspaceId` and `notebookId` (both required). By default `wait` is `true`; set `wait: false` for fire-and-forget. Control polling with `pollFrequency` (default 5 seconds) and `timeout` (default 1 hour). Pass runtime parameters via `parameters`. The output includes `jobInstanceId` and `status`.
 
-`data.engineering.RunSparkJob` runs a Spark job definition — set `workspaceId` and `sparkJobDefinitionId` (both required). Same `wait`, `pollFrequency`, `timeout`, and `parameters` as `RunNotebook`. The output includes `jobInstanceId` and `status`.
+`data.engineering.RunSparkJob` runs a Spark job definition — set `workspaceId` and `sparkJobDefinitionId` (both required). It supports the same `wait`, `pollFrequency`, `timeout`, and `parameters` options as `RunNotebook`. The output includes `jobInstanceId` and `status`.
 
-`data.engineering.RunPipeline` runs a Fabric Data Factory pipeline — set `workspaceId` and `pipelineId` (both required). Same `wait`, `pollFrequency`, `timeout`, and `parameters` options. The output includes `runId` and `status`.
+`data.engineering.RunPipeline` runs a Fabric Data Factory pipeline — set `workspaceId` and `pipelineId` (both required). It supports the same `wait`, `pollFrequency`, `timeout`, and `parameters` options. The output includes `runId` and `status`.
+
+### Power BI
+
+`powerbi.RefreshGroupDataset` starts a refresh of a Power BI dataset in a workspace using the Power BI REST API. Set `groupId` (workspace ID) and `datasetId` (dataset ID), in addition to the legacy Azure credentials.
+
+- `wait` defaults to `false`. When `false`, the task returns `requestId` immediately without polling.
+- `pollDuration` defaults to `PT5S` and controls refresh-history polling when `wait: true`.
+- `waitDuration` defaults to `PT10M` and bounds the wait for a terminal refresh result.
+- `options` accepts the common Kestra HTTP client configuration.
+- Connection properties `loginUrl` and `apiUrl` default to `https://login.microsoftonline.com` and `https://api.powerbi.com`, respectively. Empty or unresolved values fall back to these defaults.
+- Connection properties `oauthResource` and `oauthScope` default to the public-cloud Power BI resource/scope. Empty or unresolved values fall back to the defaults. For a sovereign cloud, configure all four properties to the matching identity endpoint, API endpoint, resource, and scope.
+- `notifyOption` is optional. When omitted, no notification body is added to preserve legacy request behavior. Supported values are `NoNotification`, `MailOnFailure`, and `MailOnCompletion`.
+
+When waiting, output also includes `status`, `extendedStatus`, `refreshType`, `startTime`, and `endTime`. The task succeeds only when the final status is `Completed`. HTTP 429 responses are retried using `pollDuration` and remain bounded by `waitDuration`. If polling receives HTTP 401, the task refreshes the OAuth token and retries that poll once.
+
+The canonical task type is `io.kestra.plugin.microsoft.fabric.powerbi.RefreshGroupDataset`. The former `io.kestra.plugin.powerbi.RefreshGroupDataset` task type is retained as a plugin alias so existing flows can continue to resolve after the standalone Power BI plugin is retired.
