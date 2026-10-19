@@ -252,6 +252,43 @@ class RefreshGroupDatasetTest {
     }
 
     @Test
+    void refreshesExpiredTokenAndRetriesPollingOnce(WireMockRuntimeInfo wm) throws Exception {
+        var requestId = UUID.randomUUID().toString();
+        stubFor(post(urlEqualTo("/login/tenant/oauth2/token"))
+            .inScenario("powerbi-token-refresh")
+            .whenScenarioStateIs(STARTED)
+            .willReturn(okJson("{\"access_token\":\"token-one\"}"))
+            .willSetStateTo("refreshed"));
+        stubFor(post(urlEqualTo("/login/tenant/oauth2/token"))
+            .inScenario("powerbi-token-refresh")
+            .whenScenarioStateIs("refreshed")
+            .willReturn(okJson("{\"access_token\":\"token-two\"}")));
+        stubFor(post(urlEqualTo(refreshesPath()))
+            .willReturn(aResponse().withStatus(202).withHeader("requestId", requestId)));
+        stubFor(get(urlEqualTo(refreshesPath()))
+            .inScenario("powerbi-expired-poll")
+            .whenScenarioStateIs(STARTED)
+            .willReturn(aResponse().withStatus(401).withBody("token expired"))
+            .willSetStateTo("new-token"));
+        stubFor(get(urlEqualTo(refreshesPath()))
+            .inScenario("powerbi-expired-poll")
+            .whenScenarioStateIs("new-token")
+            .willReturn(okJson("""
+                {"value":[{"requestId":"%s","status":"Completed"}]}
+                """.formatted(requestId))));
+
+        var output = task(wm).wait(Property.ofValue(true))
+            .pollDuration(Property.ofValue(Duration.ofMillis(5)))
+            .waitDuration(Property.ofValue(Duration.ofSeconds(1)))
+            .build().run(runContextFactory.of());
+
+        assertThat(output.getStatus(), is("Completed"));
+        verify(2, postRequestedFor(urlEqualTo("/login/tenant/oauth2/token")));
+        verify(getRequestedFor(urlEqualTo(refreshesPath())).withHeader("Authorization", equalTo("Bearer token-one")));
+        verify(getRequestedFor(urlEqualTo(refreshesPath())).withHeader("Authorization", equalTo("Bearer token-two")));
+    }
+
+    @Test
     void explicitlyConfiguredNotificationIsSent(WireMockRuntimeInfo wm) throws Exception {
         stubAuth(wm);
         stubFor(post(urlEqualTo(refreshesPath()))
@@ -282,9 +319,9 @@ class RefreshGroupDatasetTest {
         return "/api/v1.0/myorg/groups/group/datasets/dataset/refreshes";
     }
 
-    private static TestableRefreshGroupDataset.TestableRefreshGroupDatasetBuilder<?, ?> task(WireMockRuntimeInfo wm) {
+    private static RefreshGroupDataset.RefreshGroupDatasetBuilder<?, ?> task(WireMockRuntimeInfo wm) {
         var base = "http://localhost:" + wm.getHttpPort();
-        return TestableRefreshGroupDataset.builder()
+        return RefreshGroupDataset.builder()
             .id(UUID.randomUUID().toString())
             .type(RefreshGroupDataset.class.getName())
             .tenantId(Property.ofValue("tenant"))
@@ -292,7 +329,7 @@ class RefreshGroupDatasetTest {
             .clientSecret(Property.ofValue("secret"))
             .groupId(Property.ofValue("group"))
             .datasetId(Property.ofValue("dataset"))
-            .loginUrlOverride(base + "/login")
-            .apiUrlOverride(base + "/api");
+            .loginUrl(Property.ofValue(base + "/login"))
+            .apiUrl(Property.ofValue(base + "/api"));
     }
 }
