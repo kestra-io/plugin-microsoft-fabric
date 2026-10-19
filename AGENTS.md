@@ -24,7 +24,7 @@ Keep the legacy `groupId`, `datasetId`, `wait`, `pollDuration`, `waitDuration`, 
 
 ## Testing and build
 
-- Use the task's configurable `loginUrl` and `apiUrl` properties with WireMock for Power BI REST requests and OAuth token acquisition; tests must not depend on real tenant credentials or test-only subclasses.
+- Use the task's configurable `loginUrl`, `apiUrl`, `oauthResource`, and `oauthScope` properties with WireMock for Power BI REST requests and OAuth token acquisition; tests must not depend on real tenant credentials or test-only subclasses.
 - Cover no-wait and wait behavior, successful and failed refreshes, missing `requestId`, bounded timeout, 401 token renewal, 429 polling throttling, configurable endpoints, and legacy alias metadata.
 - Run `./gradlew test` and the repository's full checks before opening a pull request.
 - Guard any future live Azure tests behind explicit environment-based assumptions.
